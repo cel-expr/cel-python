@@ -1,0 +1,4 @@
+# Disable automatic creation of `__init__.py` files, which prevent multiple
+# workspaces from providing files with the same package prefix (e.g., "cel").
+# See https://github.com/bazelbuild/rules_python/issues/330.
+build --incompatible_default_to_explicit_init_py
