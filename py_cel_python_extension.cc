@@ -44,7 +44,7 @@
 
 namespace cel_python {
 
-namespace py = pybind11;
+namespace py = ::pybind11;
 
 void PyCelPythonExtension::DefinePythonBindings(py::module_& m) {
   py::class_<PyCelExtension>(m, "CelExtensionBase")

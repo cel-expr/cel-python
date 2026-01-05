@@ -102,8 +102,8 @@ absl::StatusOr<const cel::Compiler*> PyCelEnv::GetCompiler(
 
 absl::StatusOr<const cel::Runtime*> PyCelEnv::GetRuntime(
     const std::shared_ptr<PyCelEnv>& env, RuntimeMode runtime_mode) {
-  if (env->runtimes_.contains(runtime_mode)) {
-    return env->runtimes_[runtime_mode].get();
+  if (auto it = env->runtimes_.find(runtime_mode); it != env->runtimes_.end()) {
+    return it->second.get();
   }
 
   cel::RuntimeOptions opts;
@@ -129,9 +129,11 @@ absl::StatusOr<const cel::Runtime*> PyCelEnv::GetRuntime(
                             extension_handle->GetExtension(env));
     PY_CEL_RETURN_IF_ERROR(extension->ConfigureRuntime(builder, opts));
   }
-  PY_CEL_ASSIGN_OR_RETURN(env->runtimes_[runtime_mode],
+  PY_CEL_ASSIGN_OR_RETURN(std::unique_ptr<cel::Runtime> runtime,
                           std::move(builder).Build());
-  return env->runtimes_[runtime_mode].get();
+  const cel::Runtime* runtime_ptr = runtime.get();
+  env->runtimes_[runtime_mode] = std::move(runtime);
+  return runtime_ptr;
 }
 
 const PyCelType& PyCelEnv::GetVariableType(const std::string& name) const {
@@ -171,7 +173,7 @@ absl::StatusOr<PyCelExtension*> PyCelExtensionHandle::GetExtension(
   try {
     pybind11::handle handle = pybind11::handle(py_extension_);
     PyCelPythonExtension* py_cel_extension =
-        handle.cast<cel_python::PyCelPythonExtension*>();
+        handle.cast<PyCelPythonExtension*>();
     status_py_cel_extension = py_cel_extension->SetEnv(env);
     return py_cel_extension;
   } catch (const pybind11::cast_error& e) {
@@ -183,7 +185,7 @@ absl::StatusOr<PyCelExtension*> PyCelExtensionHandle::GetExtension(
   absl::Status status_cc_cel_extension;
   try {
     pybind11::handle handle = pybind11::handle(py_extension_);
-    return handle.cast<cel_python::PyCelExtension*>();
+    return handle.cast<PyCelExtension*>();
   } catch (const pybind11::cast_error& e) {
     status_cc_cel_extension = absl::InvalidArgumentError(e.what());
   }

@@ -26,7 +26,7 @@
 
 namespace cel_python {
 
-namespace py = pybind11;
+namespace py = ::pybind11;
 
 void PyCelOverload::DefinePythonBindings(py::module_& m) {
   py::class_<PyCelOverload, std::shared_ptr<PyCelOverload>>(m, "Overload")

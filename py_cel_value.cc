@@ -52,10 +52,10 @@
 
 namespace cel_python {
 
-namespace py = pybind11;
+namespace py = ::pybind11;
 
 void PyCelValue::DefinePythonBindings(py::module& m) {
-  py::class_<PyCelValue, std::unique_ptr<PyCelValue>>(m, "Value")
+  py::class_<PyCelValue>(m, "Value")
       .def("type", &PyCelValue::Type)
       .def("value", &PyCelValue::Value, py::return_value_policy::reference)
       .def("plain_value", &PyCelValue::PlainValue,

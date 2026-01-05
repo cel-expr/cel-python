@@ -36,7 +36,7 @@
 
 namespace cel_python {
 
-namespace py = pybind11;
+namespace py = ::pybind11;
 
 void PyCel::DefinePythonBindings(pybind11::module& m) {
   py::class_<PyCel, std::shared_ptr<PyCel>> cel_class(m, "Cel");
@@ -85,7 +85,7 @@ void PyCel::DefinePythonBindings(pybind11::module& m) {
                  functions,
              std::shared_ptr<PyCelArena> arena = nullptr) {
             if (!arena) {
-              arena = cel_python::NewArena();
+              arena = NewArena();
             }
             std::unordered_map<std::string, PyObject*> data_ptrs;
             if (data) {
@@ -121,12 +121,12 @@ std::shared_ptr<PyCelActivation> PyCel::NewActivation(
   return std::make_shared<PyCelActivation>(env_, data, functions, arena);
 }
 
-absl::StatusOr<std::unique_ptr<PyCelExpression>> PyCel::Compile(
-    const std::string& cel_expr, bool disable_check) {
+absl::StatusOr<PyCelExpression> PyCel::Compile(const std::string& cel_expr,
+                                               bool disable_check) {
   return PyCelExpression::Compile(env_, cel_expr, disable_check);
 }
 
-absl::StatusOr<std::unique_ptr<PyCelExpression>> PyCel::Deserialize(
+absl::StatusOr<PyCelExpression> PyCel::Deserialize(
     const std::string& serialized_expr) {
   return PyCelExpression::Deserialize(env_, serialized_expr);
 }

@@ -264,7 +264,7 @@ static absl::StatusOr<cel::StringValue> Translate(
 absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
                                 const cel::RuntimeOptions& opts) override {
     using TranslateFunctionAdapter =
-        ::cel::TernaryFunctionAdapter<absl::StatusOr<StringValue>,
+        cel::TernaryFunctionAdapter<absl::StatusOr<StringValue>,
                                       const StringValue&, const StringValue&,
                                       const StringValue&>;
     auto status = TranslateFunctionAdapter::RegisterMemberOverload(
@@ -343,7 +343,7 @@ If the extension is written in C++, use the `RegisterLazyFunction` function:
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
                                 const cel::RuntimeOptions& opts) override {
     using MyFunctionAdapter =
-        ::cel::UnaryFunctionAdapter<absl::StatusOr<cel::IntValue>,
+        cel::UnaryFunctionAdapter<absl::StatusOr<cel::IntValue>,
                                     const cel::IntValue&>;
     PY_CEL_RETURN_IF_ERROR(
         runtime_builder.function_registry().RegisterLazyFunction(

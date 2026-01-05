@@ -57,9 +57,9 @@ class PyCel {
                  std::string container = "");
   ~PyCel();
 
-  absl::StatusOr<std::unique_ptr<PyCelExpression>> Compile(
-      const std::string& cel_expr, bool disable_check = false);
-  absl::StatusOr<std::unique_ptr<PyCelExpression>> Deserialize(
+  absl::StatusOr<PyCelExpression> Compile(const std::string& cel_expr,
+                                          bool disable_check = false);
+  absl::StatusOr<PyCelExpression> Deserialize(
       const std::string& serialized_expr);
   std::shared_ptr<PyCelActivation> NewActivation(
       const std::unordered_map<std::string, PyObject*>& data,

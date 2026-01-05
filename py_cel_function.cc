@@ -39,7 +39,7 @@
 
 namespace cel_python {
 
-namespace py = pybind11;
+namespace py = ::pybind11;
 
 void PyCelFunction::DefinePythonBindings(pybind11::module& m) {
   py::class_<PyCelFunction, std::shared_ptr<PyCelFunction>>(m, "Function")
@@ -90,8 +90,8 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
   PyObject* py_args = PyTuple_New(args.size());
   for (int i = 0; i < args.size(); ++i) {
     PyTuple_SetItem(py_args, i,
-                    cel_python::CelValueToPyObject(args[i], env_, py_arena,
-                                                   /*plain_value=*/true));
+                    CelValueToPyObject(args[i], env_, py_arena,
+                                       /*plain_value=*/true));
   }
   PyObject* result = PyObject_CallObject(py_function_, py_args);
   absl::Status status = PyErr_toStatus();
@@ -99,7 +99,7 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
     return cel::ErrorValue(status);
   }
 
-  return cel_python::PyObjectToCelValue(
+  return PyObjectToCelValue(
       result, PyCelType::String(),
       [this]() {
         return absl::StrFormat("Python function '%s'",

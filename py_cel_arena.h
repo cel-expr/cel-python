@@ -29,7 +29,6 @@ class PyCelArena {
  public:
   static void DefinePythonBindings(pybind11::module& m);
 
-  PyCelArena();
   ~PyCelArena();
 
   // Visible for testing
@@ -43,6 +42,8 @@ class PyCelArena {
   friend std::shared_ptr<PyCelArena> NewArena();
 
  private:
+  // Private constructor. Use `NewArena()` to obtain an instance.
+  PyCelArena();
   google::protobuf::Arena arena_;
 };
 

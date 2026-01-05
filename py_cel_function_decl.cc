@@ -26,7 +26,7 @@
 
 namespace cel_python {
 
-namespace py = pybind11;
+namespace py = ::pybind11;
 
 void PyCelFunctionDecl::DefinePythonBindings(pybind11::module& m) {
   py::class_<PyCelFunctionDecl, std::shared_ptr<PyCelFunctionDecl>>(

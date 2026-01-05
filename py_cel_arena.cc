@@ -29,7 +29,7 @@
 
 namespace cel_python {
 
-namespace py = pybind11;
+namespace py = ::pybind11;
 
 void PyCelArena::DefinePythonBindings(py::module_& m) {
   py::class_<PyCelArena, std::shared_ptr<PyCelArena>>(
@@ -53,7 +53,7 @@ GetArenaMap() {
 }
 
 std::shared_ptr<PyCelArena> NewArena() {
-  std::shared_ptr<PyCelArena> anArena = std::make_shared<PyCelArena>();
+  std::shared_ptr<PyCelArena> anArena(new PyCelArena());
   GetArenaMap()[anArena->GetArena()] = anArena;
   return anArena;
 }

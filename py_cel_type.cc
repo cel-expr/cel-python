@@ -43,9 +43,9 @@
 #include <pybind11/stl.h>
 #include "pybind11_abseil/status_casters.h"
 
-namespace py = pybind11;
-
 namespace cel_python {
+
+namespace py = ::pybind11;
 
 void PyCelType::DefinePythonBindings(py::module& m) {
   py::class_<PyCelType> type(m, "Type");

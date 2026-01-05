@@ -35,7 +35,7 @@
 
 namespace cel_python {
 
-namespace py = pybind11;
+namespace py = ::pybind11;
 
 void PyCelActivation::DefinePythonBindings(py::module& m) {
   py::class_<PyCelActivation, std::shared_ptr<PyCelActivation>>(m,

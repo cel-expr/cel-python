@@ -24,6 +24,8 @@
 
 #undef LOG_ALL_PY_ERRORS
 
+namespace cel_python {
+
 static absl::Status PyErrorToStatus(PyObject* py_type, PyObject* py_error) {
   // Loose mapping from Python exceptions to absl::Status codes, consistent with
   // the pybind11 mapping.
@@ -106,3 +108,5 @@ void PyErr_noteAndClear() {
   ABSL_LOG(INFO) << "PyErr_Occurred: " << PendingPyError();
 #endif
 }
+
+}  // namespace cel_python

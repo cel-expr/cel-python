@@ -44,6 +44,15 @@ class PyCelValue {
 
   PyCelValue(cel::Value& cel_value, std::shared_ptr<PyCelArena> arena,
              std::shared_ptr<PyCelEnv> env);
+
+  // Move constructor and assignment.
+  PyCelValue(PyCelValue&& other) noexcept = default;
+  PyCelValue& operator=(PyCelValue&& other) noexcept = default;
+
+  // Disallow copying.
+  PyCelValue(const PyCelValue&) = delete;
+  PyCelValue& operator=(const PyCelValue&) = delete;
+
   virtual ~PyCelValue();
 
   virtual PyCelType Type();
@@ -70,6 +79,10 @@ class PyCelListItemAccessor : public PyCelValue {
                         std::shared_ptr<PyCelArena> arena,
                         std::shared_ptr<PyCelEnv> env)
       : PyCelValue(celValue, std::move(arena), std::move(env)), index_(index) {}
+
+  // Move constructor.
+  PyCelListItemAccessor(PyCelListItemAccessor&& other) noexcept = default;
+
   ~PyCelListItemAccessor() override = default;
 
   // Extracts the element at the given index from the list and caches the
@@ -94,6 +107,10 @@ class PyCelMapItemAccessor : public PyCelValue {
                        std::shared_ptr<PyCelEnv> env)
       : PyCelValue(celValue, std::move(arena), std::move(env)),
         key_(std::move(key)) {}
+
+  // Move constructor.
+  PyCelMapItemAccessor(PyCelMapItemAccessor&& other) noexcept = default;
+
   ~PyCelMapItemAccessor() override = default;
 
   void ResolveElement();

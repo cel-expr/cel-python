@@ -38,6 +38,8 @@ class PyCelExpression {
  public:
   static void DefinePythonBindings(pybind11::module& m);
 
+  PyCelExpression(PyCelExpression&& other) = default;
+
   PyCelExpression(const cel::expr::ParsedExpr& parsed_expr,
                   std::shared_ptr<PyCelEnv> env)
       : expr_(std::move(parsed_expr)), env_(std::move(env)) {}
@@ -47,16 +49,15 @@ class PyCelExpression {
 
   PyCelType GetReturnType();
 
-  absl::StatusOr<std::unique_ptr<PyCelValue>> Eval(
-      const PyCelActivation& activation);
+  absl::StatusOr<PyCelValue> Eval(const PyCelActivation& activation);
 
   std::string Serialize() const;
 
-  static absl::StatusOr<std::unique_ptr<PyCelExpression>> Compile(
+  static absl::StatusOr<PyCelExpression> Compile(
       const std::shared_ptr<PyCelEnv>& env, const std::string& cel_expr,
       bool disable_check);
 
-  static absl::StatusOr<std::unique_ptr<PyCelExpression>> Deserialize(
+  static absl::StatusOr<PyCelExpression> Deserialize(
       const std::shared_ptr<PyCelEnv>& env, const std::string& serialized_expr);
 
  private:

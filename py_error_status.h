@@ -19,16 +19,20 @@
 #include "absl/status/status.h"
 #include "status_macros.h"
 
-absl::Status PyErr_toStatus();
-
 #define CEL_PYTHON_ASSIGN_OR_RETURN(...)    \
   PY_CEL_RETURN_IF_ERROR(PyErr_toStatus()); \
   PY_CEL_ASSIGN_OR_RETURN(__VA_ARGS__);     \
   PY_CEL_RETURN_IF_ERROR(PyErr_toStatus());
 
+namespace cel_python {
+
+absl::Status PyErr_toStatus();
+
 // Checks if there is a pending Python exception, and if so, stores it for a
 // later `PyErr_toStatus` call and clears the exception in order for the
 // runtime to be able to continue.
 void PyErr_noteAndClear();
+
+}  // namespace cel_python
 
 #endif  // THIRD_PARTY_CEL_PYTHON_PY_ERROR_STATUS_H_

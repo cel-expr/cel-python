@@ -29,6 +29,7 @@
 #include "runtime/runtime.h"
 #include "py_cel.h"
 #include "py_cel_extension.h"
+#include "py_cel_type.h"
 #include "py_descriptor_database.h"
 #include "py_message_factory.h"
 #include "google/protobuf/descriptor.h"

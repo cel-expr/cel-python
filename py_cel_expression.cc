@@ -49,15 +49,16 @@
 #include <pybind11/pybind11.h>
 #include "pybind11_abseil/status_casters.h"
 
-using ::cel::expr::CheckedExpr;
-using ::cel::expr::ParsedExpr;
 
 namespace cel_python {
 
-namespace py = pybind11;
+using ::cel::expr::CheckedExpr;
+using ::cel::expr::ParsedExpr;
+
+namespace py = ::pybind11;
 
 void PyCelExpression::DefinePythonBindings(py::module& m) {
-  py::class_<PyCelExpression, std::unique_ptr<PyCelExpression>>(m, "Expression")
+  py::class_<PyCelExpression>(m, "Expression")
       .def("return_type", &PyCelExpression::GetReturnType)
       .def("serialize",
            [](PyCelExpression& self) {
@@ -68,7 +69,7 @@ void PyCelExpression::DefinePythonBindings(py::module& m) {
       .def("eval", &PyCelExpression::Eval, py::arg("activation"));
 }
 
-absl::StatusOr<std::unique_ptr<PyCelExpression>> PyCelExpression::Compile(
+absl::StatusOr<PyCelExpression> PyCelExpression::Compile(
     const std::shared_ptr<PyCelEnv>& env, const std::string& cel_expr,
     bool disable_check) {
   ABSL_CHECK(PyGILState_Check());
@@ -81,7 +82,7 @@ absl::StatusOr<std::unique_ptr<PyCelExpression>> PyCelExpression::Compile(
     CEL_PYTHON_ASSIGN_OR_RETURN(auto ast, compiler->GetParser().Parse(*s));
     ParsedExpr parsed_expr;
     PY_CEL_RETURN_IF_ERROR(cel::AstToParsedExpr(*ast, &parsed_expr));
-    return std::make_unique<PyCelExpression>(parsed_expr, env);
+    return PyCelExpression(parsed_expr, env);
   }
 
   CEL_PYTHON_ASSIGN_OR_RETURN(auto validation, compiler->Compile(cel_expr));
@@ -92,7 +93,7 @@ absl::StatusOr<std::unique_ptr<PyCelExpression>> PyCelExpression::Compile(
                           validation.ReleaseAst());
   CheckedExpr checked_expr;
   PY_CEL_RETURN_IF_ERROR(cel::AstToCheckedExpr(*ast, &checked_expr));
-  return std::make_unique<PyCelExpression>(checked_expr, env);
+  return PyCelExpression(checked_expr, env);
 }
 
 PyCelType PyCelExpression::GetReturnType() {
@@ -112,7 +113,7 @@ PyCelType PyCelExpression::GetReturnType() {
   return PyCelType::FromTypeProto(it->second);
 }
 
-absl::StatusOr<std::unique_ptr<PyCelValue>> PyCelExpression::Eval(
+absl::StatusOr<PyCelValue> PyCelExpression::Eval(
     const PyCelActivation& activation) {
   ABSL_CHECK(PyGILState_Check());
   if (cel_program_ == nullptr) {
@@ -138,7 +139,7 @@ absl::StatusOr<std::unique_ptr<PyCelValue>> PyCelExpression::Eval(
       cel::Value result,
       cel_program_->Evaluate(arena->GetArena(), env->GetMessageFactory(),
                              *activation.GetActivation()));
-  return std::make_unique<PyCelValue>(result, arena, std::move(env));
+  return PyCelValue(result, arena, std::move(env));
 }
 
 std::string PyCelExpression::Serialize() const {
@@ -151,7 +152,7 @@ std::string PyCelExpression::Serialize() const {
   return any.SerializeAsString();
 }
 
-absl::StatusOr<std::unique_ptr<PyCelExpression>> PyCelExpression::Deserialize(
+absl::StatusOr<PyCelExpression> PyCelExpression::Deserialize(
     const std::shared_ptr<PyCelEnv>& env, const std::string& serialized_expr) {
   ABSL_CHECK(PyGILState_Check());
   google::protobuf::Any any;
@@ -163,11 +164,11 @@ absl::StatusOr<std::unique_ptr<PyCelExpression>> PyCelExpression::Deserialize(
 
   CheckedExpr checked_expr;
   if (any.UnpackTo(&checked_expr)) {
-    return std::make_unique<PyCelExpression>(checked_expr, env);
+    return PyCelExpression(checked_expr, env);
   }
   ParsedExpr parsed_expr;
   if (any.UnpackTo(&parsed_expr)) {
-    return std::make_unique<PyCelExpression>(parsed_expr, env);
+    return PyCelExpression(parsed_expr, env);
   }
 
   return absl::InvalidArgumentError(
