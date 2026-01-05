@@ -26,6 +26,8 @@ namespace cel_python {
 
 // A DescriptorDatabase that uses a Python DescriptorPool to find descriptors.
 class PyDescriptorDatabase : public google::protobuf::DescriptorDatabase {
+ private:
+  using StringViewArg = const std::string&;
  public:
   explicit PyDescriptorDatabase(PyObject* py_descriptor_pool);
   ~PyDescriptorDatabase() override;

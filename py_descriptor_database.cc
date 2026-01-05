@@ -43,7 +43,7 @@ PyDescriptorDatabase::~PyDescriptorDatabase() {
 
 // Find a file by file name.  Fills in in *output and returns true if found.
 // Otherwise, returns false, leaving the contents of *output undefined.
-bool PyDescriptorDatabase::FindFileByName(absl::string_view filename,
+bool PyDescriptorDatabase::FindFileByName(StringViewArg filename,
                                           google::protobuf::FileDescriptorProto* output) {
   ABSL_CHECK(PyGILState_Check());
   const google::protobuf::FileDescriptor* file = standard_pool_.FindFileByName(filename);
@@ -89,7 +89,7 @@ bool PyDescriptorDatabase::FindFileByName(absl::string_view filename,
 // If found, fills in *output and returns true, otherwise returns false
 // and leaves *output undefined.
 bool PyDescriptorDatabase::FindFileContainingSymbol(
-    absl::string_view symbol_name, google::protobuf::FileDescriptorProto* output) {
+    StringViewArg symbol_name, google::protobuf::FileDescriptorProto* output) {
   ABSL_CHECK(PyGILState_Check());
   const google::protobuf::FileDescriptor* file =
       standard_pool_.FindFileContainingSymbol(symbol_name);
@@ -135,7 +135,7 @@ bool PyDescriptorDatabase::FindFileContainingSymbol(
 // otherwise returns false and leaves *output undefined.  containing_type
 // must be a fully-qualified type name.
 bool PyDescriptorDatabase::FindFileContainingExtension(
-    absl::string_view containing_type, int field_number,
+    StringViewArg containing_type, int field_number,
     google::protobuf::FileDescriptorProto* output) {
   ABSL_CHECK(PyGILState_Check());
   PyObject* py_containing_type = PyObject_CallMethod(

@@ -14,6 +14,18 @@ bazel_dep(name = "bazel_skylib", version = "1.8.2")
 # https://registry.bazel.build/modules/cel-cpp
 bazel_dep(name = "cel-cpp", version = "0.14.0", repo_name = "com_google_cel_cpp")
 
+# 12/30/2025
+_CEL_CPP_COMMIT = "13b249f589ab3e22dee5b384169cb7dd50804b36"
+
+_CEL_CPP_SHA256 = "c7596db4538722e78f9c7f7ae704a15fd48d5e84254d717b5b558c3b1b0169fa"
+
+archive_override(
+    module_name = "cel-cpp",
+    sha256 = _CEL_CPP_SHA256,
+    strip_prefix = "cel-cpp-" + _CEL_CPP_COMMIT,
+    url = "https://github.com/google/cel-cpp/archive/" + _CEL_CPP_COMMIT + ".tar.gz",
+)
+
 # https://registry.bazel.build/modules/cel-spec
 bazel_dep(name = "cel-spec", version = "0.25.1", repo_name = "com_google_cel_spec")
 
