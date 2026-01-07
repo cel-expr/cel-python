@@ -172,10 +172,7 @@ absl::StatusOr<PyCelExtension*> PyCelExtensionHandle::GetExtension(
   absl::Status status_py_cel_extension;
   try {
     pybind11::handle handle = pybind11::handle(py_extension_);
-    PyCelPythonExtension* py_cel_extension =
-        handle.cast<PyCelPythonExtension*>();
-    status_py_cel_extension = py_cel_extension->SetEnv(env);
-    return py_cel_extension;
+    return handle.cast<PyCelPythonExtension*>();
   } catch (const pybind11::cast_error& e) {
     status_py_cel_extension = absl::InvalidArgumentError(e.what());
   }

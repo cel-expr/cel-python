@@ -46,6 +46,9 @@ namespace cel_python {
 
 namespace py = ::pybind11;
 
+static const cel::FunctionDescriptorOptions kFunctionDescriptorOptions = {
+    .is_strict = true, .is_contextual = true};
+
 void PyCelPythonExtension::DefinePythonBindings(py::module_& m) {
   py::class_<PyCelExtension>(m, "CelExtensionBase")
       .def(py::init<std::string>(), py::arg("name"));
@@ -58,18 +61,6 @@ void PyCelPythonExtension::DefinePythonBindings(py::module_& m) {
 PyCelPythonExtension::PyCelPythonExtension(
     std::string name, std::vector<PyCelFunctionDecl> functions)
     : PyCelExtension(std::move(name)), functions_(std::move(functions)) {}
-
-// TODO(b/462745713): pass the env to the Invoke method instead of storing it
-// as a member variable and remove this method.
-absl::Status PyCelPythonExtension::SetEnv(
-    const std::shared_ptr<PyCelEnv>& env) {
-  if (env_ != nullptr && env_ != env) {
-    return absl::FailedPreconditionError(
-        "PyCelExtension already has an environment");
-  }
-  env_ = env;
-  return absl::OkStatus();
-}
 
 absl::Status PyCelPythonExtension::ConfigureCompiler(
     cel::CompilerBuilder& compiler_builder,
@@ -115,12 +106,11 @@ absl::Status PyCelPythonExtension::ConfigureRuntime(
       }
 
       cel::FunctionDescriptor descriptor(function.name(), overload.is_member(),
-                                         types,
-                                         /*is_strict=*/true);
+                                         types, kFunctionDescriptorOptions);
       if (overload.py_function()) {
         PY_CEL_RETURN_IF_ERROR(runtime_builder.function_registry().Register(
             descriptor, std::make_unique<PyCelFunctionAdapter>(
-                            env_, function.name(), overload.py_function())));
+                            function.name(), overload.py_function())));
       } else {
         PY_CEL_RETURN_IF_ERROR(
             runtime_builder.function_registry().RegisterLazyFunction(

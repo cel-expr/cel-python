@@ -62,8 +62,7 @@ class PyCelFunction {
 // function.
 class PyCelFunctionAdapter : public cel::Function {
  public:
-  PyCelFunctionAdapter(const std::shared_ptr<PyCelEnv>& env,
-                       std::string function_name, PyObject* py_function);
+  PyCelFunctionAdapter(std::string function_name, PyObject* py_function);
   ~PyCelFunctionAdapter() override;
 
   absl::StatusOr<cel::Value> Invoke(
@@ -71,7 +70,6 @@ class PyCelFunctionAdapter : public cel::Function {
       const cel::Function::InvokeContext& context) const final;
 
  private:
-  std::shared_ptr<PyCelEnv> env_;
   std::string function_name_;
   PyObject* py_function_;
 };

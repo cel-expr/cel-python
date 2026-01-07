@@ -81,6 +81,7 @@ pybind_extension(
         "@com_google_cel_cpp//parser:parser_interface",
         "@com_google_cel_cpp//runtime",
         "@com_google_cel_cpp//runtime:activation",
+        "@com_google_cel_cpp//runtime:embedder_context",
         "@com_google_cel_cpp//runtime:function",
         "@com_google_cel_cpp//runtime:reference_resolver",
         "@com_google_cel_cpp//runtime:runtime_builder",

@@ -38,6 +38,7 @@
 #include "compiler/compiler.h"
 #include "extensions/protobuf/runtime_adapter.h"
 #include "parser/parser_interface.h"
+#include "runtime/embedder_context.h"
 #include "runtime/runtime.h"
 #include "py_cel_activation.h"
 #include "py_cel_arena.h"
@@ -135,10 +136,14 @@ absl::StatusOr<PyCelValue> PyCelExpression::Eval(
   }
   std::shared_ptr<PyCelArena> arena = activation.GetArena();
   std::shared_ptr<PyCelEnv> env = activation.GetEnv();
+  cel::EmbedderContext embedder_context = cel::EmbedderContext::From(&env);
+  cel::EvaluateOptions options;
+  options.message_factory = env->GetMessageFactory();
+  options.embedder_context = &embedder_context;
   CEL_PYTHON_ASSIGN_OR_RETURN(
       cel::Value result,
-      cel_program_->Evaluate(arena->GetArena(), env->GetMessageFactory(),
-                             *activation.GetActivation()));
+      cel_program_->Evaluate(arena->GetArena(), *activation.GetActivation(),
+                             std::move(options)));
   return PyCelValue(result, arena, std::move(env));
 }
 

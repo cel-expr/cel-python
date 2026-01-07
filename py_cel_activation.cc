@@ -37,6 +37,9 @@ namespace cel_python {
 
 namespace py = ::pybind11;
 
+static const cel::FunctionDescriptorOptions kFunctionDescriptorOptions = {
+    .is_strict = true, .is_contextual = true};
+
 void PyCelActivation::DefinePythonBindings(py::module& m) {
   py::class_<PyCelActivation, std::shared_ptr<PyCelActivation>>(m,
                                                                 "Activation");
@@ -67,10 +70,10 @@ PyCelActivation::PyCelActivation(
     }
     cel::FunctionDescriptor func_descriptor(function->function_name(),
                                             function->is_member(), parameters,
-                                            /*is_strict=*/true);
+                                            kFunctionDescriptorOptions);
     activation_.InsertFunction(
         func_descriptor, std::make_unique<PyCelFunctionAdapter>(
-                             env, function->function_name(), function->impl()));
+                             function->function_name(), function->impl()));
   }
 };
 

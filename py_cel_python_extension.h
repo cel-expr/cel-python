@@ -15,7 +15,6 @@
 #ifndef THIRD_PARTY_CEL_PYTHON_PY_CEL_PYTHON_EXTENSION_H_
 #define THIRD_PARTY_CEL_PYTHON_PY_CEL_PYTHON_EXTENSION_H_
 
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -30,17 +29,11 @@
 
 namespace cel_python {
 
-class PyCelEnv;
-
 class PyCelPythonExtension : public PyCelExtension {
  public:
   static void DefinePythonBindings(pybind11::module& m);
   PyCelPythonExtension(std::string name,
                        std::vector<PyCelFunctionDecl> functions);
-
-  // TODO(b/462745713): pass the env to the Invoke method instead of storing it
-  // as a member variable.
-  absl::Status SetEnv(const std::shared_ptr<PyCelEnv>& env);
 
  protected:
   absl::Status ConfigureCompiler(
@@ -52,7 +45,6 @@ class PyCelPythonExtension : public PyCelExtension {
 
  private:
   std::vector<PyCelFunctionDecl> functions_;
-  std::shared_ptr<PyCelEnv> env_;
 };
 
 }  // namespace cel_python

@@ -27,6 +27,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/types/span.h"
 #include "common/value.h"
+#include "runtime/embedder_context.h"
 #include "runtime/function.h"
 #include "py_cel_env.h"
 #include "py_cel_type.h"
@@ -40,6 +41,17 @@
 namespace cel_python {
 
 namespace py = ::pybind11;
+
+namespace {
+
+static std::shared_ptr<PyCelEnv> GetEnvFromContext(
+    const cel::Function::InvokeContext& context) {
+  ABSL_CHECK(context.embedder_context());  // Crash OK: all call sites are local
+                                           // to the library.
+  return *context.embedder_context()->Get<std::shared_ptr<PyCelEnv>*>();
+}
+
+}  // namespace
 
 void PyCelFunction::DefinePythonBindings(pybind11::module& m) {
   py::class_<PyCelFunction, std::shared_ptr<PyCelFunction>>(m, "Function")
@@ -65,12 +77,9 @@ PyCelFunction::~PyCelFunction() {
   PyGILState_Release(gil_state);
 };
 
-PyCelFunctionAdapter::PyCelFunctionAdapter(const std::shared_ptr<PyCelEnv>& env,
-                                           std::string function_name,
+PyCelFunctionAdapter::PyCelFunctionAdapter(std::string function_name,
                                            PyObject* py_function)
-    : env_(env),
-      function_name_(std::move(function_name)),
-      py_function_(py_function) {
+    : function_name_(std::move(function_name)), py_function_(py_function) {
   Py_XINCREF(py_function_);
 }
 
@@ -85,12 +94,13 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
     const cel::Function::InvokeContext& context) const {
   ABSL_CHECK(PyGILState_Check());
 
+  std::shared_ptr<PyCelEnv> env = GetEnvFromContext(context);
   PY_CEL_ASSIGN_OR_RETURN(auto py_arena,
                           PyCelArena::FromProtoArena(context.arena()));
   PyObject* py_args = PyTuple_New(args.size());
   for (int i = 0; i < args.size(); ++i) {
     PyTuple_SetItem(py_args, i,
-                    CelValueToPyObject(args[i], env_, py_arena,
+                    CelValueToPyObject(args[i], env, py_arena,
                                        /*plain_value=*/true));
   }
   PyObject* result = PyObject_CallObject(py_function_, py_args);
@@ -105,7 +115,7 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
         return absl::StrFormat("Python function '%s'",
                                PyUnicode_AsUTF8(PyObject_Repr(py_function_)));
       },
-      env_, context.arena());
+      env, context.arena());
 };
 
 }  // namespace cel_python
