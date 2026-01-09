@@ -37,7 +37,7 @@
 #include "common/value.h"
 #include "common/value_kind.h"
 #include "py_cel.h"
-#include "py_cel_env.h"
+#include "py_cel_env_internal.h"
 #include "py_cel_type.h"
 #include "py_cel_value_provider.h"
 #include "py_error_status.h"
@@ -68,7 +68,7 @@ void PyCelValue::DefinePythonBindings(py::module& m) {
 
 // Should be called with the GIL held.
 PyCelValue::PyCelValue(cel::Value& cel_value, std::shared_ptr<PyCelArena> arena,
-                       std::shared_ptr<PyCelEnv> env)
+                       std::shared_ptr<PyCelEnvInternal> env)
     : cel_value_(std::move(cel_value)),
       object_(nullptr),
       plain_object_(nullptr),
@@ -117,7 +117,7 @@ PyObject* PyCelValue::PlainValue() {
 std::string PyCelValue::ToString() { return cel_value_.DebugString(); }
 
 PyCelValueProvider::PyCelValueProvider(std::string name, PyObject* value,
-                                       std::shared_ptr<PyCelEnv> env)
+                                       std::shared_ptr<PyCelEnvInternal> env)
     : name_(std::move(name)), py_object_(value), env_(std::move(env)) {
   Py_INCREF(py_object_);
 }
@@ -258,7 +258,7 @@ std::string PyCelMapItemAccessor::ToString() {
 
 // This should be called with the GIL held.
 PyObject* CelValueToPyObject(const cel::Value& cel_value,
-                             const std::shared_ptr<PyCelEnv>& env,
+                             const std::shared_ptr<PyCelEnvInternal>& env,
                              const std::shared_ptr<PyCelArena>& arena,
                              bool plain_value) {
   switch (cel_value.kind()) {
@@ -438,7 +438,7 @@ static void EnsureDateTimeModuleImported() {
 absl::StatusOr<cel::Value> PyObjectToCelValue(
     PyObject* py_object, const PyCelType& expected_type,
     absl::FunctionRef<std::string()> context,
-    const std::shared_ptr<PyCelEnv>& env, google::protobuf::Arena* arena,
+    const std::shared_ptr<PyCelEnvInternal>& env, google::protobuf::Arena* arena,
     bool bypass_type_check) {
   if (!py_object) {
     return cel::ErrorValue(absl::InvalidArgumentError(

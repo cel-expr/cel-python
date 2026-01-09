@@ -26,7 +26,8 @@
 #include "absl/strings/string_view.h"
 #include "common/function_descriptor.h"
 #include "common/kind.h"
-#include "py_cel_env.h"
+#include "py_cel_arena.h"
+#include "py_cel_env_internal.h"
 #include "py_cel_function.h"
 #include "py_cel_value_provider.h"
 #include "google/protobuf/arena.h"
@@ -46,7 +47,7 @@ void PyCelActivation::DefinePythonBindings(py::module& m) {
 }
 
 PyCelActivation::PyCelActivation(
-    std::shared_ptr<PyCelEnv> env,
+    std::shared_ptr<PyCelEnvInternal> env,
     const std::unordered_map<std::string, PyObject*>& data,
     const std::vector<std::shared_ptr<PyCelFunction>>& functions,
     const std::shared_ptr<PyCelArena>& arena)
@@ -79,6 +80,8 @@ PyCelActivation::PyCelActivation(
 
 PyCelActivation::~PyCelActivation() = default;
 
-std::shared_ptr<PyCelEnv> PyCelActivation::GetEnv() const { return env_; }
+std::shared_ptr<PyCelEnvInternal> PyCelActivation::GetEnv() const {
+  return env_;
+}
 
 }  // namespace cel_python

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_H_
-#define THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_H_
+#ifndef THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_INTERNAL_H_
+#define THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_INTERNAL_H_
 
 #include <Python.h>  // IWYU pragma: keep - Needed for PyObject
 
@@ -27,7 +27,8 @@
 #include "absl/status/statusor.h"
 #include "compiler/compiler.h"
 #include "runtime/runtime.h"
-#include "py_cel.h"
+#include "runtime/runtime_builder.h"
+#include "runtime/runtime_options.h"
 #include "py_cel_extension.h"
 #include "py_cel_type.h"
 #include "py_descriptor_database.h"
@@ -38,13 +39,15 @@
 
 namespace cel_python {
 
+class PyCelEnvInternal;
+
 class PyCelExtensionHandle {
  public:
   explicit PyCelExtensionHandle(PyObject* extension);
   ~PyCelExtensionHandle();
 
   absl::StatusOr<PyCelExtension*> GetExtension(
-      const std::shared_ptr<PyCelEnv>& env);
+      const std::shared_ptr<PyCelEnvInternal>& env);
 
  private:
   // The Python object that was passed to the constructor and is retained for
@@ -56,17 +59,18 @@ class PyCelExtensionHandle {
   PyCelExtension* cel_extension_;
 };
 
-// PyCelEnv is a container for internal CEL components not exposed to the python
-// side.
-class PyCelEnv {
+// PyCelEnvInternal is a container for internal CEL components not exposed to
+// the python side.
+class PyCelEnvInternal {
  public:
-  PyCelEnv(PyObject* descriptor_pool,
-           std::unordered_map<std::string, PyCelType> variableTypes,
-           const std::vector<PyObject*>& extensions, std::string container);
-  ~PyCelEnv() = default;
+  PyCelEnvInternal(PyObject* descriptor_pool,
+                   std::unordered_map<std::string, PyCelType> variableTypes,
+                   const std::vector<PyObject*>& extensions,
+                   std::string container);
+  ~PyCelEnvInternal() = default;
 
   static absl::StatusOr<const cel::Compiler*> GetCompiler(
-      const std::shared_ptr<PyCelEnv>& env);
+      const std::shared_ptr<PyCelEnvInternal>& env);
 
   enum RuntimeMode {
     // Standard CEL runtime with warnings treated as errors.
@@ -77,7 +81,7 @@ class PyCelEnv {
   };
 
   static absl::StatusOr<const cel::Runtime*> GetRuntime(
-      const std::shared_ptr<PyCelEnv>& env, RuntimeMode runtime_mode);
+      const std::shared_ptr<PyCelEnvInternal>& env, RuntimeMode runtime_mode);
 
   const google::protobuf::DescriptorPool* GetDescriptorPool() const {
     return &descriptor_pool_;
@@ -116,4 +120,4 @@ class PyCelEnv {
 
 }  // namespace cel_python
 
-#endif  // THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_H_
+#endif  // THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_INTERNAL_H_

@@ -28,7 +28,7 @@
 
 namespace cel_python {
 
-class PyCelEnv;
+class PyCelEnvInternal;
 class PyCelFunction;
 
 // Wraps a CelActivation. Supports evaluation of CEL expressions.
@@ -36,18 +36,18 @@ class PyCelActivation {
  public:
   static void DefinePythonBindings(pybind11::module& m);
 
-  PyCelActivation(std::shared_ptr<PyCelEnv> env,
+  PyCelActivation(std::shared_ptr<PyCelEnvInternal> env,
                   const std::unordered_map<std::string, PyObject*>& data,
                   const std::vector<std::shared_ptr<PyCelFunction>>& functions,
                   const std::shared_ptr<PyCelArena>& arena);
   ~PyCelActivation();
 
-  std::shared_ptr<PyCelEnv> GetEnv() const;
+  std::shared_ptr<PyCelEnvInternal> GetEnv() const;
   std::shared_ptr<PyCelArena> GetArena() const { return arena_; }
   const cel::Activation* GetActivation() const { return &activation_; }
 
  private:
-  std::shared_ptr<PyCelEnv> env_;
+  std::shared_ptr<PyCelEnvInternal> env_;
   std::shared_ptr<PyCelArena> arena_;
   cel::Activation activation_;
 };

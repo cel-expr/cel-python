@@ -34,7 +34,7 @@
 
 namespace cel_python {
 
-class PyCelEnv;
+class PyCelEnvInternal;
 
 // Wrapper for a Python function that implements a CEL late-bound function.
 // These function implementations are supplied to Activation.

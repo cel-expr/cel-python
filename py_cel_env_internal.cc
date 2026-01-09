@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "py_cel_env.h"
+#include "py_cel_env_internal.h"
 
 #include <memory>
 #include <string>
@@ -47,10 +47,10 @@
 
 namespace cel_python {
 
-PyCelEnv::PyCelEnv(PyObject* descriptor_pool,
-                   std::unordered_map<std::string, PyCelType> variableTypes,
-                   const std::vector<PyObject*>& extensions,
-                   std::string container)
+PyCelEnvInternal::PyCelEnvInternal(
+    PyObject* descriptor_pool,
+    std::unordered_map<std::string, PyCelType> variableTypes,
+    const std::vector<PyObject*>& extensions, std::string container)
     : py_descriptor_database_(descriptor_pool),
       descriptor_pool_(&py_descriptor_database_),
       message_factory_(&descriptor_pool_),
@@ -62,10 +62,8 @@ PyCelEnv::PyCelEnv(PyObject* descriptor_pool,
   }
 }
 
-// TODO(b/462745713): change the parameter to a const reference once we no
-// longer need to pass in a `shared_ptr<PyCelEnv>` to extensions.
-absl::StatusOr<const cel::Compiler*> PyCelEnv::GetCompiler(
-    const std::shared_ptr<PyCelEnv>& env) {
+absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
+    const std::shared_ptr<PyCelEnvInternal>& env) {
   if (env->compiler_) {
     return env->compiler_.get();
   }
@@ -100,8 +98,8 @@ absl::StatusOr<const cel::Compiler*> PyCelEnv::GetCompiler(
   return env->compiler_.get();
 }
 
-absl::StatusOr<const cel::Runtime*> PyCelEnv::GetRuntime(
-    const std::shared_ptr<PyCelEnv>& env, RuntimeMode runtime_mode) {
+absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
+    const std::shared_ptr<PyCelEnvInternal>& env, RuntimeMode runtime_mode) {
   if (auto it = env->runtimes_.find(runtime_mode); it != env->runtimes_.end()) {
     return it->second.get();
   }
@@ -136,7 +134,8 @@ absl::StatusOr<const cel::Runtime*> PyCelEnv::GetRuntime(
   return runtime_ptr;
 }
 
-const PyCelType& PyCelEnv::GetVariableType(const std::string& name) const {
+const PyCelType& PyCelEnvInternal::GetVariableType(
+    const std::string& name) const {
   ABSL_CHECK(PyGILState_Check());
   auto it = variable_types_.find(name);
   if (it != variable_types_.end()) {
@@ -158,7 +157,7 @@ PyCelExtensionHandle::~PyCelExtensionHandle() {
 }
 
 absl::StatusOr<PyCelExtension*> PyCelExtensionHandle::GetExtension(
-    const std::shared_ptr<PyCelEnv>& env) {
+    const std::shared_ptr<PyCelEnvInternal>& env) {
   if (cel_extension_) {
     return cel_extension_;
   }

@@ -31,7 +31,7 @@
 
 namespace cel_python {
 
-class PyCelEnv;
+class PyCelEnvInternal;
 
 // Wraps a CelExpression. Supports serialization and deserialization.
 class PyCelExpression {
@@ -41,10 +41,10 @@ class PyCelExpression {
   PyCelExpression(PyCelExpression&& other) = default;
 
   PyCelExpression(const cel::expr::ParsedExpr& parsed_expr,
-                  std::shared_ptr<PyCelEnv> env)
+                  std::shared_ptr<PyCelEnvInternal> env)
       : expr_(std::move(parsed_expr)), env_(std::move(env)) {}
   PyCelExpression(const cel::expr::CheckedExpr& checked_expr,
-                  std::shared_ptr<PyCelEnv> env)
+                  std::shared_ptr<PyCelEnvInternal> env)
       : expr_(std::move(checked_expr)), env_(std::move(env)) {}
 
   PyCelType GetReturnType();
@@ -54,16 +54,17 @@ class PyCelExpression {
   std::string Serialize() const;
 
   static absl::StatusOr<PyCelExpression> Compile(
-      const std::shared_ptr<PyCelEnv>& env, const std::string& cel_expr,
+      const std::shared_ptr<PyCelEnvInternal>& env, const std::string& cel_expr,
       bool disable_check);
 
   static absl::StatusOr<PyCelExpression> Deserialize(
-      const std::shared_ptr<PyCelEnv>& env, const std::string& serialized_expr);
+      const std::shared_ptr<PyCelEnvInternal>& env,
+      const std::string& serialized_expr);
 
  private:
   std::variant<cel::expr::ParsedExpr, cel::expr::CheckedExpr>
       expr_;
-  std::shared_ptr<PyCelEnv> env_;
+  std::shared_ptr<PyCelEnvInternal> env_;
   std::unique_ptr<cel::Program> cel_program_;
 };
 

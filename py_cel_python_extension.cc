@@ -30,7 +30,7 @@
 #include "compiler/compiler.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "py_cel_env.h"
+#include "py_cel_env_internal.h"
 #include "py_cel_extension.h"
 #include "py_cel_function.h"
 #include "py_cel_function_decl.h"

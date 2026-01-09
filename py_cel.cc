@@ -27,7 +27,7 @@
 #include "absl/status/statusor.h"
 #include "py_cel_activation.h"
 #include "py_cel_arena.h"
-#include "py_cel_env.h"
+#include "py_cel_env_internal.h"
 #include "py_cel_expression.h"
 #include "py_cel_type.h"
 #include <pybind11/pybind11.h>
@@ -106,9 +106,9 @@ void PyCel::DefinePythonBindings(pybind11::module& m) {
 PyCel::PyCel(PyObject* descriptor_pool,
              std::unordered_map<std::string, PyCelType> variable_types,
              const std::vector<PyObject*>& extensions, std::string container)
-    : env_(std::make_unique<PyCelEnv>(descriptor_pool,
-                                      std::move(variable_types), extensions,
-                                      std::move(container))) {
+    : env_(std::make_unique<PyCelEnvInternal>(
+          descriptor_pool, std::move(variable_types), extensions,
+          std::move(container))) {
   ABSL_CHECK(PyGILState_Check());
 }
 

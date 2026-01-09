@@ -66,10 +66,10 @@ class PyCel {
       const std::vector<std::shared_ptr<PyCelFunction>>& functions,
       const std::shared_ptr<PyCelArena>& arena);
 
-  std::shared_ptr<PyCelEnv> GetEnv() { return env_; }
+  std::shared_ptr<PyCelEnvInternal> GetEnv() { return env_; }
 
  private:
-  std::shared_ptr<PyCelEnv> env_;
+  std::shared_ptr<PyCelEnvInternal> env_;
 };
 
 }  // namespace cel_python

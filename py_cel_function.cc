@@ -29,7 +29,8 @@
 #include "common/value.h"
 #include "runtime/embedder_context.h"
 #include "runtime/function.h"
-#include "py_cel_env.h"
+#include "py_cel_arena.h"
+#include "py_cel_env_internal.h"
 #include "py_cel_type.h"
 #include "py_cel_value.h"
 #include "py_error_status.h"
@@ -44,11 +45,11 @@ namespace py = ::pybind11;
 
 namespace {
 
-static std::shared_ptr<PyCelEnv> GetEnvFromContext(
+static std::shared_ptr<PyCelEnvInternal> GetEnvFromContext(
     const cel::Function::InvokeContext& context) {
   ABSL_CHECK(context.embedder_context());  // Crash OK: all call sites are local
                                            // to the library.
-  return *context.embedder_context()->Get<std::shared_ptr<PyCelEnv>*>();
+  return *context.embedder_context()->Get<std::shared_ptr<PyCelEnvInternal>*>();
 }
 
 }  // namespace
@@ -94,7 +95,7 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
     const cel::Function::InvokeContext& context) const {
   ABSL_CHECK(PyGILState_Check());
 
-  std::shared_ptr<PyCelEnv> env = GetEnvFromContext(context);
+  std::shared_ptr<PyCelEnvInternal> env = GetEnvFromContext(context);
   PY_CEL_ASSIGN_OR_RETURN(auto py_arena,
                           PyCelArena::FromProtoArena(context.arena()));
   PyObject* py_args = PyTuple_New(args.size());

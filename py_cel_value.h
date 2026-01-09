@@ -31,7 +31,7 @@
 namespace cel_python {
 
 class PyCelArena;
-class PyCelEnv;
+class PyCelEnvInternal;
 class PyMessageFactory;
 
 // Wraps a cel::Value. Converts the cel::Value to a Python object on demand and
@@ -43,7 +43,7 @@ class PyCelValue {
   static void DefinePythonBindings(pybind11::module& m);
 
   PyCelValue(cel::Value& cel_value, std::shared_ptr<PyCelArena> arena,
-             std::shared_ptr<PyCelEnv> env);
+             std::shared_ptr<PyCelEnvInternal> env);
 
   // Move constructor and assignment.
   PyCelValue(PyCelValue&& other) noexcept = default;
@@ -69,7 +69,7 @@ class PyCelValue {
   PyObject* object_;
   PyObject* plain_object_;
   std::shared_ptr<PyCelArena> arena_;
-  std::shared_ptr<PyCelEnv> env_;
+  std::shared_ptr<PyCelEnvInternal> env_;
 };
 
 // Variant of PyCelValue that is used to access a specific element of a list.
@@ -77,7 +77,7 @@ class PyCelListItemAccessor : public PyCelValue {
  public:
   PyCelListItemAccessor(cel::Value celValue, int index,
                         std::shared_ptr<PyCelArena> arena,
-                        std::shared_ptr<PyCelEnv> env)
+                        std::shared_ptr<PyCelEnvInternal> env)
       : PyCelValue(celValue, std::move(arena), std::move(env)), index_(index) {}
 
   // Move constructor.
@@ -104,7 +104,7 @@ class PyCelMapItemAccessor : public PyCelValue {
  public:
   PyCelMapItemAccessor(cel::Value celValue, cel::Value key,
                        std::shared_ptr<PyCelArena> arena,
-                       std::shared_ptr<PyCelEnv> env)
+                       std::shared_ptr<PyCelEnvInternal> env)
       : PyCelValue(celValue, std::move(arena), std::move(env)),
         key_(std::move(key)) {}
 
@@ -126,14 +126,14 @@ class PyCelMapItemAccessor : public PyCelValue {
 };
 
 PyObject* CelValueToPyObject(const cel::Value& cel_value,
-                             const std::shared_ptr<PyCelEnv>& env,
+                             const std::shared_ptr<PyCelEnvInternal>& env,
                              const std::shared_ptr<PyCelArena>& arena,
                              bool plain_value);
 
 absl::StatusOr<cel::Value> PyObjectToCelValue(
     PyObject* py_object, const PyCelType& expected_type,
     absl::FunctionRef<std::string()> context,
-    const std::shared_ptr<PyCelEnv>& env, google::protobuf::Arena* arena,
+    const std::shared_ptr<PyCelEnvInternal>& env, google::protobuf::Arena* arena,
     bool bypass_type_check = false);
 
 }  // namespace cel_python

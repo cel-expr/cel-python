@@ -22,7 +22,7 @@
 #include <string>
 
 #include "common/value.h"
-#include "py_cel_env.h"
+#include "py_cel_env_internal.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/message.h"
@@ -36,7 +36,7 @@ namespace cel_python {
 class PyCelValueProvider {
  public:
   PyCelValueProvider(std::string name, PyObject* value,
-                     std::shared_ptr<PyCelEnv> env);
+                     std::shared_ptr<PyCelEnvInternal> env);
   ~PyCelValueProvider();
 
   cel::Value Provide(const google::protobuf::DescriptorPool* descriptor_pool,
@@ -46,7 +46,7 @@ class PyCelValueProvider {
  private:
   std::string name_;
   PyObject* py_object_;
-  std::shared_ptr<PyCelEnv> env_;
+  std::shared_ptr<PyCelEnvInternal> env_;
 
   cel::ErrorValue InvalidTypeError() const;
 };
