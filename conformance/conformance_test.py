@@ -158,14 +158,14 @@ class ConformanceTest(absltest.TestCase):
         break
 
     self.descriptor_pool = descriptor_pool.Default()
-    self.cel = cel.Cel(
+    self.env = cel.NewEnv(
         self.descriptor_pool,
         variables=decls,
         extensions=extensions,
         container=simple_test.container,
     )
     try:
-      compiled_expr = self.cel.compile(
+      compiled_expr = self.env.compile(
           simple_test.expr, disable_check=simple_test.disable_check
       )
     except Exception as e:  # pylint: disable=broad-except
@@ -188,7 +188,7 @@ class ConformanceTest(absltest.TestCase):
     for key, value in simple_test.bindings.items():
       values[key] = self._convert_value(value.value)
 
-    act = self.cel.Activation(values)
+    act = self.env.Activation(values)
     try:
       res = compiled_expr.eval(act)
     except Exception as e:  # pylint: disable=broad-except

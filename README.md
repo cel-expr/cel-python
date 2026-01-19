@@ -16,12 +16,12 @@ To create a CEL environment, you need to define
 variable types that can be used in expressions.
 
 ```python
-cel = py_cel.Cel(variables={"x": py_cel.Type.INT, "y": py_cel.Type.INT})
+cel_env = py_cel.NewEnv(variables={"x": py_cel.Type.INT, "y": py_cel.Type.INT})
 ```
 
 #### Optional configuration parameters
 
-The `py_cel.Cel` constructor also accepts the following optional parameters:
+The `py_cel.NewEnv` constructor also accepts the following optional parameters:
 
 *   `pool` (`descriptor_pool.DescriptorPool`): The descriptor pool used for
     resolving protobuf message types within CEL expressions. If not provided,
@@ -39,7 +39,7 @@ Use the `compile()` method to compile a CEL expression string into a reusable
 expression object.
 
 ```python
-expr = cel.compile("x + y > 10")
+expr = cel_env.compile("x + y > 10")
 ```
 
 The `expr` object can be serialized into a binary format for persistence and
@@ -48,7 +48,7 @@ later deserialized.
 ```python
 serialized_expr = expr.serialize()
 # ... can be stored or sent over network ...
-deserialized_expr = cel.deserialize(serialized_expr)
+deserialized_expr = cel_env.deserialize(serialized_expr)
 ```
 
 The `compile` method can take an optional `disable_check=True` argument, which
@@ -62,7 +62,7 @@ provides bindings for variables, and then call `eval()`.
 
 ```python
 # Provide variable values in a dictionary.
-activation = cel.Activation({"x": 7, "y": 4})
+activation = cel_env.Activation({"x": 7, "y": 4})
 
 # Evaluate the expression.
 result = expr.eval(activation)
@@ -94,9 +94,9 @@ garbage-collected in Python.
 ```python
 arena = py_cel.Arena()
 
-activation1 = cel.Activation({"x": 7, "y": 4}, arena)
+activation1 = cel_env.Activation({"x": 7, "y": 4}, arena)
 # evaluate some expressions
-activation2 = cel.Activation({"x": 8, "y": 9}, arena)
+activation2 = cel_env.Activation({"x": 8, "y": 9}, arena)
 # evaluate some more expressions
 
 # Process all results. Note: Don't put CelValues in long-lived data structures
@@ -112,7 +112,7 @@ You can pass protobuf messages as variables to an activation; CEL
 expressions can return protobuf messages.
 
 First, ensure your proto messages are available in the descriptor pool used by
-`py_cel.Cel`, by importing your proto library in Python:
+`py_cel.NewEnv`, by importing your proto library in Python:
 
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_pb
 
@@ -121,7 +121,7 @@ qualified name.
 
 ```python
 # Declare 'msg_var' as a message type.
-cel = py_cel.Cel(
+cel = py_cel.NewEnv(
     pool,
     variables={
         "msg_var": py_cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
@@ -141,7 +141,7 @@ an instance of the Python proto message class.
 ```python
 my_msg = test_pb.TestAllTypes(single_int32=42)
 
-activation = cel.Activation({"msg_var": my_msg})
+activation = cel_env.Activation({"msg_var": my_msg})
 result = expr.eval(activation)
 print(f"Result: {result.value()}")
 ```
@@ -149,7 +149,7 @@ print(f"Result: {result.value()}")
 An expression can also return a proto message:
 
 ```python
-msg_expr = cel.compile(
+msg_expr = cel_env.compile(
     "cel.expr.conformance.proto2.TestAllTypes{single_int32: 123}"
 )
 msg_result = msg_expr.eval(activation)
@@ -174,8 +174,8 @@ Standard extensions are available under `py_cel.ext`.
 ```python
 from py_cel.ext import ext_math
 
-cel = py_cel.Cel(pool, extensions=[ext_math.ExtMath()])
-expr = cel.compile("math.sqrt(4)")
+cel = py_cel.NewEnv(pool, extensions=[ext_math.ExtMath()])
+expr = cel_env.compile("math.sqrt(4)")
 ```
 
 #### Defining a custom extension in Python
@@ -203,8 +203,8 @@ my_ext = py_cel.CelExtension(
     ],
 )
 
-cel = py_cel.Cel(pool, extensions=[my_ext])
-expr = cel.compile("my_func(1)")
+cel_env = py_cel.NewEnv(pool, extensions=[my_ext])
+expr = cel_env.compile("my_func(1)")
 ```
 
 #### Defining a custom extension in C++
@@ -304,10 +304,10 @@ Now you can use the extension in PyCel:
 ```python
 import translation_cel_ext
 
-cel = py_cel.Cel(variables={},
+cel_env = py_cel.NewEnv(variables={},
   extensions=[translation_cel_ext.TranslationCelExtension()])
 
-expr = cel.compile("'Hello, world!'.translate('en', 'es')")
+expr = cel_env.compile("'Hello, world!'.translate('en', 'es')")
 ```
 
 #### Late-bound extension functions
@@ -357,11 +357,11 @@ If the extension is written in C++, use the `RegisterLazyFunction` function:
 Now you can bind the function at runtime:
 
 ```python
-cel = py_cel.Cel(variables={}, extensions=[my_ext])
-expr = cel.compile("my_func(42)")
+cel_env = py_cel.NewEnv(variables={}, extensions=[my_ext])
+expr = cel_env.compile("my_func(42)")
 
 multiplier = 2
-act = cel.Activation({}, functions={"my_func": lambda x: x * multiplier})
+act = cel_env.Activation({}, functions={"my_func": lambda x: x * multiplier})
 res = expr.eval(act)
 # res.value() == 84
 ```

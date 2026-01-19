@@ -29,7 +29,7 @@ class PyCelTest(absltest.TestCase):
   def setUp(self):
     super().setUp()
 
-    self.cel = cel.Cel(
+    self.env = cel.NewEnv(
         variables={
             "var_bool": cel.Type.BOOL,
             "var_int": cel.Type.INT,
@@ -86,12 +86,12 @@ class PyCelTest(absltest.TestCase):
   ):
     if data is None:
       data = {}
-    expr = self.cel.compile(expression)
+    expr = self.env.compile(expression)
     if expected_return_type is not None:
       self.assertTrue(
           expected_return_type.is_assignable_from(expr.return_type())
       )
-    act = self.cel.Activation(data)
+    act = self.env.Activation(data)
     return expr.eval(act)
 
   def testUnsetVar(self):
@@ -626,7 +626,7 @@ class PyCelTest(absltest.TestCase):
 
     # If the expected type is parameterized, is_assignable_from takes
     # into account the type's parameterization.
-    expr = self.cel.compile("type(1)")
+    expr = self.env.compile("type(1)")
     self.assertFalse(
         cel.Type.Type(cel.Type.STRING).is_assignable_from(expr.return_type())
     )
@@ -652,38 +652,38 @@ class PyCelTest(absltest.TestCase):
     )  # This behavior is counterintuitive but works as implemented.
 
   def testCelExpressionPersistence_checkedExpr(self):
-    expr = self.cel.compile("var_msg.single_string")
+    expr = self.env.compile("var_msg.single_string")
     as_bytes = expr.serialize()
 
-    expr = self.cel.deserialize(as_bytes)
+    expr = self.env.deserialize(as_bytes)
 
     msg = test_all_types_pb.TestAllTypes()
     msg.single_string = "Hey!"
-    res = expr.eval(self.cel.Activation({"var_msg": msg}))
+    res = expr.eval(self.env.Activation({"var_msg": msg}))
     self.assertEqual(res.value(), "Hey!")
 
   def testCelExpressionPersistence_uncheckedExpr(self):
-    expr = self.cel.compile("runtimely + 2", disable_check=True)
+    expr = self.env.compile("runtimely + 2", disable_check=True)
     as_bytes = expr.serialize()
 
-    expr = self.cel.deserialize(as_bytes)
+    expr = self.env.deserialize(as_bytes)
 
-    res = expr.eval(self.cel.Activation({"runtimely": 40}))
+    res = expr.eval(self.env.Activation({"runtimely": 40}))
     self.assertEqual(res.value(), 42)
 
   def testCelExpressionPersistence_badSerializedFormat(self):
     with self.assertRaises(Exception) as e:
-      self.cel.deserialize("b'foo'")
+      self.env.deserialize("b'foo'")
     self.assertIn("Cannot parse serialized CEL expression", str(e.exception))
 
   def testCheckedCelExpression_raises(self):
     with self.assertRaises(Exception) as e:
-      self.cel.compile("runtimely + 2", disable_check=False)
+      self.env.compile("runtimely + 2", disable_check=False)
     self.assertIn("undeclared reference to 'runtimely'", str(e.exception))
 
   def testUncheckedCelExpression(self):
-    expr = self.cel.compile("runtimely + 2", disable_check=True)
-    res = expr.eval(self.cel.Activation({"runtimely": 40}))
+    expr = self.env.compile("runtimely + 2", disable_check=True)
+    res = expr.eval(self.env.Activation({"runtimely": 40}))
     self.assertEqual(res.value(), 42)
 
   def testActivationWithArena(self):
@@ -694,12 +694,12 @@ class PyCelTest(absltest.TestCase):
     msg = test_all_types_pb.TestAllTypes()
     msg.single_string = "Hey"
 
-    expr = self.cel.compile(
+    expr = self.env.compile(
         "cel.expr.conformance.proto2.TestAllTypes{"
         "single_string: var_msg.single_string}"
     )
 
-    res = expr.eval(self.cel.Activation({"var_msg": msg}, arena=arena))
+    res = expr.eval(self.env.Activation({"var_msg": msg}, arena=arena))
 
     # Clear out reference to `arena` to test garbage collection.
     arena = None  # pylint: disable=unused-variable
@@ -721,7 +721,7 @@ class PyCelTest(absltest.TestCase):
   def testCompilationErrorHandling(self):
     # Check parser error.
     with self.assertRaises(Exception) as e:
-      self.cel.compile("'Hello,' # 'World!'", disable_check=True)
+      self.env.compile("'Hello,' # 'World!'", disable_check=True)
     self.assertIn(
         "1:10: Syntax error: token recognition error at: '#'\n "
         "| 'Hello,' # 'World!'\n "
@@ -737,7 +737,7 @@ class PyCelTest(absltest.TestCase):
 
     # Check type-checker error.
     with self.assertRaises(Exception) as e:
-      self.cel.compile("'Hello,' - 'World!'")
+      self.env.compile("'Hello,' - 'World!'")
     self.assertIn(
         "<input>:1:10: found no matching overload for '_-_' applied to"
         " '(string, string)'\n "
@@ -747,9 +747,9 @@ class PyCelTest(absltest.TestCase):
     )
 
   def testErrorHandling(self):
-    bad_cel = cel.Cel(_BadDescriptorPool(), variables={})
+    bad_env = cel.NewEnv(_BadDescriptorPool(), variables={})
     with self.assertRaises(Exception) as e:
-      bad_cel.compile("cel.expr.conformance.proto2.TestSomeTypes{}")
+      bad_env.compile("cel.expr.conformance.proto2.TestSomeTypes{}")
     self.assertRegex(
         str(e.exception),
         r"Could not find file containing symbol:.* \[NOT_FOUND\]",

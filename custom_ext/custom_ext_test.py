@@ -40,16 +40,16 @@ class CustomExtTest(parameterized.TestCase):
   ) -> cel.Expression:
     """Creates a CEL expression for the given extension and compiles the expression."""
     self.descriptor_pool = descriptor_pool.Default()
-    self.cel = cel.Cel(
+    self.env = cel.NewEnv(
         self.descriptor_pool,
         variables={},
         extensions=[ext()],
     )
-    return self.cel.compile(expression)
+    return self.env.compile(expression)
 
   def _create_activation(self, impl) -> cel.Activation:
     """Creates a CEL Activation with a late-bound translate function."""
-    return self.cel.Activation(
+    return self.env.Activation(
         {},
         functions=[
             cel.Function(
@@ -66,7 +66,7 @@ class CustomExtTest(parameterized.TestCase):
     compiled_expr = self._compile_expr(
         ext, "'Hello, world!'.translate('en', 'es')"
     )
-    act = self.cel.Activation({})
+    act = self.env.Activation({})
     res = compiled_expr.eval(act)
 
     self.assertEqual(res.value(), "¡Hola Mundo!")
@@ -85,7 +85,7 @@ class CustomExtTest(parameterized.TestCase):
   @parameterized.named_parameters(EXT_IMPLEMENTATIONS)
   def test_error_no_matching_overload(self, ext):
     compiled_expr = self._compile_expr(ext, "translate_late('Hello, world!')")
-    act = self.cel.Activation(
+    act = self.env.Activation(
         {},
         functions=[
             cel.Function(

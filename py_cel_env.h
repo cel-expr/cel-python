@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef THIRD_PARTY_CEL_PYTHON_PY_CEL_H_
-#define THIRD_PARTY_CEL_PYTHON_PY_CEL_H_
+#ifndef THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_H_
+#define THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_H_
 
 #include <Python.h>  // IWYU pragma: keep - Needed for PyObject
 
@@ -41,21 +41,16 @@ class RuntimeOptions;
 // All classes and functions in this namespace are pybind11-wrapped.
 namespace cel_python {
 
-class PyCel;
-class PyCelEnv;
+class PyCelEnvInternal;
 class PyCelFunction;
 class PyMessageFactory;
 
 // CEL environment. Provides access to the CEL compiler.
-class PyCel {
+class PyCelEnv {
  public:
   static void DefinePythonBindings(pybind11::module& m);
 
-  explicit PyCel(PyObject* descriptor_pool = nullptr,
-                 std::unordered_map<std::string, PyCelType> variable_types = {},
-                 const std::vector<PyObject*>& extensions = {},
-                 std::string container = "");
-  ~PyCel();
+  ~PyCelEnv();
 
   absl::StatusOr<PyCelExpression> Compile(const std::string& cel_expr,
                                           bool disable_check = false);
@@ -69,9 +64,13 @@ class PyCel {
   std::shared_ptr<PyCelEnvInternal> GetEnv() { return env_; }
 
  private:
+  // Private constructor. Use `py_cel.NewEnv()` in python to obtain an instance.
+  PyCelEnv(PyObject* descriptor_pool,
+           std::unordered_map<std::string, PyCelType> variable_types,
+           const std::vector<PyObject*>& extensions, std::string container);
   std::shared_ptr<PyCelEnvInternal> env_;
 };
 
 }  // namespace cel_python
 
-#endif  // THIRD_PARTY_CEL_PYTHON_PY_CEL_H_
+#endif  // THIRD_PARTY_CEL_PYTHON_PY_CEL_ENV_H_

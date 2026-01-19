@@ -12,12 +12,12 @@ exports_files(["LICENSE"])
 pybind_extension(
     name = "py_cel",
     srcs = [
-        "py_cel.cc",
-        "py_cel.h",
         "py_cel_activation.cc",
         "py_cel_activation.h",
         "py_cel_arena.cc",
         "py_cel_arena.h",
+        "py_cel_env.cc",
+        "py_cel_env.h",
         "py_cel_env_internal.cc",
         "py_cel_env_internal.h",
         "py_cel_expression.cc",

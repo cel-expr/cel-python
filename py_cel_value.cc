@@ -36,7 +36,7 @@
 #include "common/type.h"
 #include "common/value.h"
 #include "common/value_kind.h"
-#include "py_cel.h"
+#include "py_cel_arena.h"
 #include "py_cel_env_internal.h"
 #include "py_cel_type.h"
 #include "py_cel_value_provider.h"

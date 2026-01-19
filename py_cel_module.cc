@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "py_cel.h"
 #include "py_cel_activation.h"
 #include "py_cel_arena.h"
+#include "py_cel_env.h"
 #include "py_cel_expression.h"
 #include "py_cel_function.h"
 #include "py_cel_function_decl.h"
@@ -40,7 +40,7 @@ PYBIND11_MODULE(py_cel, m) {
   PyCelFunctionDecl::DefinePythonBindings(m);
   PyCelPythonExtension::DefinePythonBindings(m);
   PyCelFunction::DefinePythonBindings(m);
-  PyCel::DefinePythonBindings(m);
+  PyCelEnv::DefinePythonBindings(m);
 }
 
 }  // namespace cel_python

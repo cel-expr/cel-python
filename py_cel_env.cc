@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "py_cel.h"
+#include "py_cel_env.h"
 
 #include <Python.h>  // IWYU pragma: keep - Needed for PyObject
 
@@ -38,48 +38,47 @@ namespace cel_python {
 
 namespace py = ::pybind11;
 
-void PyCel::DefinePythonBindings(pybind11::module& m) {
-  py::class_<PyCel, std::shared_ptr<PyCel>> cel_class(m, "Cel");
+void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
+  py::class_<PyCelEnv, std::shared_ptr<PyCelEnv>> cel_class(m, "Env");
+  m.def(
+      "NewEnv",
+      [](py::object descriptor_pool,
+         std::optional<std::unordered_map<std::string, PyCelType>> variables,
+         std::optional<std::vector<py::object>> extensions,
+         const std::optional<std::string>& container) {
+        PyObject* pool_ptr = nullptr;
+        if (descriptor_pool.is_none()) {
+          // Replicates python's `descriptor_pool.Default()`
+          pool_ptr = py::module::import("google.protobuf.descriptor_pool")
+                         .attr("Default")()
+                         .ptr();
+        } else {
+          pool_ptr = descriptor_pool.ptr();
+        }
+
+        std::vector<PyObject*> ext_ptrs;
+        if (extensions) {
+          ext_ptrs.reserve(extensions->size());
+          for (const auto& ext : *extensions) {
+            ext_ptrs.push_back(ext.ptr());
+          }
+        }
+
+        return PyCelEnv(pool_ptr,
+                        std::move(variables).value_or(
+                            std::unordered_map<std::string, PyCelType>{}),
+                        ext_ptrs, container.value_or(""));
+      },
+      py::arg("descriptor_pool") = py::none(),
+      py::arg("variables") = py::none(), py::arg("extensions") = py::none(),
+      py::arg("container") = py::none());
   cel_class
-      .def(py::init([](py::object descriptor_pool,
-                       std::optional<std::unordered_map<std::string, PyCelType>>
-                           variables,
-                       std::optional<std::vector<py::object>> extensions,
-                       const std::optional<std::string>& container) {
-             PyObject* pool_ptr = nullptr;
-             if (descriptor_pool.is_none()) {
-               // Replicates python's `descriptor_pool.Default()`
-               pool_ptr = py::module::import("google.protobuf.descriptor_pool")
-                              .attr("Default")()
-                              .ptr();
-             } else {
-               pool_ptr = descriptor_pool.ptr();
-             }
-
-             std::vector<PyObject*> ext_ptrs;
-             if (extensions) {
-               ext_ptrs.reserve(extensions->size());
-               for (const auto& ext : *extensions) {
-                 ext_ptrs.push_back(ext.ptr());
-               }
-             }
-
-             return std::make_shared<PyCel>(
-                 pool_ptr,
-                 std::move(variables).value_or(
-                     std::unordered_map<std::string, PyCelType>{}),
-                 ext_ptrs, container.value_or(""));
-           }),
-           py::arg("descriptor_pool") = py::none(),
-           py::arg("variables") = py::none(),
-           py::arg("extensions") = py::none(),
-           py::arg("container") = py::none())
-      .def("compile", &PyCel::Compile, py::arg("expression"),
+      .def("compile", &PyCelEnv::Compile, py::arg("expression"),
            py::arg("disable_check") = false)
-      .def("deserialize", &PyCel::Deserialize, py::arg("serialized"))
+      .def("deserialize", &PyCelEnv::Deserialize, py::arg("serialized"))
       .def(
           "Activation",
-          [](PyCel& self,
+          [](PyCelEnv& self,
              std::optional<std::unordered_map<std::string, py::object>> data,
              const std::optional<std::vector<std::shared_ptr<PyCelFunction>>>&
                  functions,
@@ -103,30 +102,31 @@ void PyCel::DefinePythonBindings(pybind11::module& m) {
           py::arg("arena") = nullptr);
 }
 
-PyCel::PyCel(PyObject* descriptor_pool,
-             std::unordered_map<std::string, PyCelType> variable_types,
-             const std::vector<PyObject*>& extensions, std::string container)
+PyCelEnv::PyCelEnv(PyObject* descriptor_pool,
+                   std::unordered_map<std::string, PyCelType> variable_types,
+                   const std::vector<PyObject*>& extensions,
+                   std::string container)
     : env_(std::make_unique<PyCelEnvInternal>(
           descriptor_pool, std::move(variable_types), extensions,
           std::move(container))) {
   ABSL_CHECK(PyGILState_Check());
 }
 
-PyCel::~PyCel() = default;
+PyCelEnv::~PyCelEnv() = default;
 
-std::shared_ptr<PyCelActivation> PyCel::NewActivation(
+std::shared_ptr<PyCelActivation> PyCelEnv::NewActivation(
     const std::unordered_map<std::string, PyObject*>& data,
     const std::vector<std::shared_ptr<PyCelFunction>>& functions,
     const std::shared_ptr<PyCelArena>& arena) {
   return std::make_shared<PyCelActivation>(env_, data, functions, arena);
 }
 
-absl::StatusOr<PyCelExpression> PyCel::Compile(const std::string& cel_expr,
-                                               bool disable_check) {
+absl::StatusOr<PyCelExpression> PyCelEnv::Compile(const std::string& cel_expr,
+                                                  bool disable_check) {
   return PyCelExpression::Compile(env_, cel_expr, disable_check);
 }
 
-absl::StatusOr<PyCelExpression> PyCel::Deserialize(
+absl::StatusOr<PyCelExpression> PyCelEnv::Deserialize(
     const std::string& serialized_expr) {
   return PyCelExpression::Deserialize(env_, serialized_expr);
 }
