@@ -13,6 +13,9 @@
 # limitations under the License.
 
 """A sample CEL extension implemented entirely in Python."""
+
+from typing import Any
+
 import py_cel as cel
 
 
@@ -51,6 +54,61 @@ class SampleCelExtension(cel.CelExtension):
                     )
                 ],
             ),
+            # Tests for type adaptation.
+            cel.FunctionDecl(
+                "lerp",
+                [
+                    cel.Overload(
+                        "lerp_int_int_double",
+                        return_type=cel.Type.DOUBLE,
+                        parameters=[
+                            cel.Type.INT,
+                            cel.Type.INT,
+                            cel.Type.DOUBLE,
+                        ],
+                        is_member=False,
+                        impl=self.lerp,
+                    ),
+                    cel.Overload(
+                        "lerp_uint_uint_double",
+                        return_type=cel.Type.DOUBLE,
+                        parameters=[
+                            cel.Type.UINT,
+                            cel.Type.UINT,
+                            cel.Type.DOUBLE,
+                        ],
+                        is_member=False,
+                        impl=self.lerp,
+                    ),
+                ],
+            ),
+            cel.FunctionDecl(
+                "getOrDefault",
+                [
+                    cel.Overload(
+                        "map_get_or_default_string_dyn",
+                        return_type=cel.Type.DYN,
+                        parameters=[
+                            cel.Type.Map(cel.Type.STRING, cel.Type.DYN),
+                            cel.Type.STRING,
+                            cel.Type.DYN,
+                        ],
+                        is_member=True,
+                        impl=self.map_get_or_default,
+                    ),
+                    cel.Overload(
+                        "get_or_default_map_string_dyn",
+                        return_type=cel.Type.DYN,
+                        parameters=[
+                            cel.Type.Map(cel.Type.STRING, cel.Type.DYN),
+                            cel.Type.STRING,
+                            cel.Type.DYN,
+                        ],
+                        is_member=False,
+                        impl=self.map_get_or_default,
+                    ),
+                ],
+            ),
         ],
     )
 
@@ -60,3 +118,15 @@ class SampleCelExtension(cel.CelExtension):
     if text != "Hello, world!":
       raise ValueError("Come on, this is just 'Hello, world!'")
     return "¡Hola Mundo!"
+
+  def lerp(self, a: int, b: int, t: float) -> float:
+    """Linearly interpolate between a and b using t."""
+    if t < 0.0 or t > 1.0:
+      raise ValueError("t must be between 0.0 and 1.0")
+    return a + (b - a) * t
+
+  def map_get_or_default(
+      self, m: dict[str, Any], key: str, default: Any
+  ) -> Any:
+    """Get the value for the key from the map, or return the default value."""
+    return m.get(key, default)

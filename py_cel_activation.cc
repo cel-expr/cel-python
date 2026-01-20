@@ -74,7 +74,8 @@ PyCelActivation::PyCelActivation(
                                             kFunctionDescriptorOptions);
     activation_.InsertFunction(
         func_descriptor, std::make_unique<PyCelFunctionAdapter>(
-                             function->function_name(), function->impl()));
+                             function->function_name(), function->return_type(),
+                             function->impl()));
   }
 };
 

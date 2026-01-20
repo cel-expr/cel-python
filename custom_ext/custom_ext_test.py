@@ -57,6 +57,7 @@ class CustomExtTest(parameterized.TestCase):
                 [cel.Type.STRING],
                 False,
                 impl,
+                return_type=cel.Type.STRING,
             )
         ],
     )
@@ -93,6 +94,7 @@ class CustomExtTest(parameterized.TestCase):
                 [cel.Type.STRING, cel.Type.INT],
                 False,
                 lambda _: "¡Hola Mundo!",
+                return_type=cel.Type.STRING,
             )
         ],
     )
@@ -188,6 +190,39 @@ def _lost_in_translation_return_none(arg1: str) -> str:  # pylint: disable=unuse
 
 def _lost_in_translation_raising_error(text: str) -> str:  # pylint: disable=unused-argument
   raise LookupError("Lost in translation")
+
+TEST_EXPRESSIONS = [
+    ("getOrDefaultReceiver", "{'a': 1, 'b': 2}.getOrDefault('c', 3) == 3"),
+    ("getOrDefault", "getOrDefault({'a': 'z', 'b': 'y'}, 'a', 'x') == 'z'"),
+    ("lerp_int", "lerp(1, 2, 0.5) == 1.5"),
+    ("lerp_uint", "lerp(1u, 2u, 0.5) == 1.5"),
+]
+
+
+class PythonTypeMappingsTest(parameterized.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.descriptor_pool = descriptor_pool.Default()
+    self.env = cel.NewEnv(
+        self.descriptor_pool,
+        variables={},
+        extensions=[sample_cel_ext.SampleCelExtension()],
+    )
+
+  @parameterized.named_parameters(TEST_EXPRESSIONS)
+  def test_expression(self, expr):
+    compiled_expr = self.env.compile(expr)
+    act = self.env.Activation()
+    res = compiled_expr.eval(act)
+    self.assertEqual(res.value(), True)
+
+  def test_lerp_error_out_of_bounds(self):
+    compiled_expr = self.env.compile("lerp(1, 2, 1.5)")
+    act = self.env.Activation()
+    res = compiled_expr.eval(act)
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn("t must be between 0.0 and 1.0", res.value())
 
 
 if __name__ == "__main__":

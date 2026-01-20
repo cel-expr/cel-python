@@ -56,15 +56,18 @@ static std::shared_ptr<PyCelEnvInternal> GetEnvFromContext(
 
 void PyCelFunction::DefinePythonBindings(pybind11::module& m) {
   py::class_<PyCelFunction, std::shared_ptr<PyCelFunction>>(m, "Function")
-      .def(py::init<std::string, std::vector<PyCelType>, bool, PyObject*>(),
+      .def(py::init<std::string, std::vector<PyCelType>, bool, PyObject*,
+                    PyCelType>(),
            py::arg("function_name"), py::arg("parameters"),
-           py::arg("is_member"), py::arg("impl"));
+           py::arg("is_member"), py::arg("impl"),
+           py::arg("return_type") = PyCelType::Dyn());
 }
 
 PyCelFunction::PyCelFunction(std::string function_name,
                              std::vector<PyCelType> parameters, bool is_member,
-                             PyObject* impl)
+                             PyObject* impl, PyCelType return_type)
     : function_name_(std::move(function_name)),
+      return_type_(std::move(return_type)),
       parameters_(std::move(parameters)),
       is_member_(is_member),
       impl_(impl) {
@@ -79,8 +82,11 @@ PyCelFunction::~PyCelFunction() {
 };
 
 PyCelFunctionAdapter::PyCelFunctionAdapter(std::string function_name,
+                                           PyCelType return_type,
                                            PyObject* py_function)
-    : function_name_(std::move(function_name)), py_function_(py_function) {
+    : function_name_(std::move(function_name)),
+      return_type_(std::move(return_type)),
+      py_function_(py_function) {
   Py_XINCREF(py_function_);
 }
 
@@ -111,7 +117,7 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
   }
 
   return PyObjectToCelValue(
-      result, PyCelType::String(),
+      result, return_type_,
       [this]() {
         return absl::StrFormat("Python function '%s'",
                                PyUnicode_AsUTF8(PyObject_Repr(py_function_)));

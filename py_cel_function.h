@@ -17,19 +17,14 @@
 
 #include <Python.h>  // IWYU pragma: keep - Needed for PyObject
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "absl/base/nullability.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "common/value.h"
 #include "runtime/function.h"
 #include "py_cel_type.h"
-#include "google/protobuf/arena.h"
-#include "google/protobuf/descriptor.h"
-#include "google/protobuf/message.h"
 #include <pybind11/pybind11.h>
 
 namespace cel_python {
@@ -43,16 +38,18 @@ class PyCelFunction {
   static void DefinePythonBindings(pybind11::module& m);
 
   PyCelFunction(std::string function_name, std::vector<PyCelType> parameters,
-                bool is_member, PyObject* impl);
+                bool is_member, PyObject* impl, PyCelType return_type);
   ~PyCelFunction();
 
   std::string function_name() const { return function_name_; }
   const std::vector<PyCelType>& parameters() const { return parameters_; }
   bool is_member() const { return is_member_; }
   PyObject* impl() const { return impl_; }
+  const PyCelType& return_type() const { return return_type_; }
 
  private:
   std::string function_name_;
+  PyCelType return_type_;
   std::vector<PyCelType> parameters_;
   bool is_member_;
   PyObject* impl_;
@@ -62,7 +59,8 @@ class PyCelFunction {
 // function.
 class PyCelFunctionAdapter : public cel::Function {
  public:
-  PyCelFunctionAdapter(std::string function_name, PyObject* py_function);
+  PyCelFunctionAdapter(std::string function_name, PyCelType return_type,
+                       PyObject* py_function);
   ~PyCelFunctionAdapter() override;
 
   absl::StatusOr<cel::Value> Invoke(
@@ -71,6 +69,7 @@ class PyCelFunctionAdapter : public cel::Function {
 
  private:
   std::string function_name_;
+  PyCelType return_type_;
   PyObject* py_function_;
 };
 

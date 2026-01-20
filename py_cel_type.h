@@ -41,6 +41,10 @@ class PyCelType {
   // Creates a dynamic type.
   PyCelType();
   PyCelType(const PyCelType& other) = default;
+  PyCelType& operator=(const PyCelType& other) = default;
+  PyCelType(PyCelType&& other) = default;
+  PyCelType& operator=(PyCelType&& other) = default;
+
   // Creates a message type.
   explicit PyCelType(const std::string& name);
   PyCelType(cel::Kind kind, const std::string& name);

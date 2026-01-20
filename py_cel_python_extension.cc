@@ -30,7 +30,6 @@
 #include "compiler/compiler.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "py_cel_env_internal.h"
 #include "py_cel_extension.h"
 #include "py_cel_function.h"
 #include "py_cel_function_decl.h"
@@ -102,7 +101,13 @@ absl::Status PyCelPythonExtension::ConfigureRuntime(
       std::vector<cel::Kind> types;
       types.reserve(overload.parameters().size());
       for (const PyCelType& arg : overload.parameters()) {
-        types.push_back(arg.GetKind());
+        if (arg.GetKind() == cel::Kind::kDyn) {
+          // C++ runtime dispatcher historically uses kAny for wildcard type (
+          // not distinguishing between dyn and any)
+          types.push_back(cel::Kind::kAny);
+        } else {
+          types.push_back(arg.GetKind());
+        }
       }
 
       cel::FunctionDescriptor descriptor(function.name(), overload.is_member(),
@@ -110,7 +115,8 @@ absl::Status PyCelPythonExtension::ConfigureRuntime(
       if (overload.py_function()) {
         PY_CEL_RETURN_IF_ERROR(runtime_builder.function_registry().Register(
             descriptor, std::make_unique<PyCelFunctionAdapter>(
-                            function.name(), overload.py_function())));
+                            function.name(), overload.return_type(),
+                            overload.py_function())));
       } else {
         PY_CEL_RETURN_IF_ERROR(
             runtime_builder.function_registry().RegisterLazyFunction(
