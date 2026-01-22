@@ -18,9 +18,12 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "cel/expr/checked.pb.h"
 #include "cel/expr/syntax.pb.h"
@@ -43,13 +46,14 @@
 #include "py_cel_activation.h"
 #include "py_cel_arena.h"
 #include "py_cel_env_internal.h"
+#include "py_cel_function.h"
 #include "py_cel_type.h"
 #include "py_cel_value.h"
 #include "py_error_status.h"
 #include "status_macros.h"
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include "pybind11_abseil/status_casters.h"
-
 
 namespace cel_python {
 
@@ -67,7 +71,37 @@ void PyCelExpression::DefinePythonBindings(py::module& m) {
              // decoder from std::string to Python `str`.
              return py::bytes(self.PyCelExpression::Serialize());
            })
-      .def("eval", &PyCelExpression::Eval, py::arg("activation"));
+      .def(
+          "eval",
+          [](PyCelExpression& self,
+             std::optional<std::shared_ptr<PyCelActivation>> activation,
+             const std::optional<std::unordered_map<std::string, py::object>>&
+                 data,
+             const std::optional<std::vector<std::shared_ptr<PyCelFunction>>>&
+                 functions,
+             const std::shared_ptr<PyCelArena>& arena =
+                 nullptr) -> absl::StatusOr<PyCelValue> {
+            if (activation) {
+              if (data || functions || arena) {
+                return absl::InvalidArgumentError(
+                    "Cannot provide both activation and any other arguments.");
+              }
+              return self.Eval(**activation);
+            }
+            std::unordered_map<std::string, PyObject*> data_ptrs;
+            if (data) {
+              for (auto const& [key, val] : *data) {
+                data_ptrs[key] = val.ptr();
+              }
+            }
+            return self.Eval(PyCelActivation(
+                self.env_, data_ptrs,
+                functions.value_or(
+                    std::vector<std::shared_ptr<PyCelFunction>>{}),
+                arena ? arena : NewArena()));
+          },
+          py::arg("activation") = py::none(), py::arg("data") = py::none(),
+          py::arg("functions") = py::none(), py::arg("arena") = nullptr);
 }
 
 absl::StatusOr<PyCelExpression> PyCelExpression::Compile(

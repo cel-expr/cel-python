@@ -57,15 +57,15 @@ variables are not known at compile time.
 
 ### Evaluation
 
-To evaluate a compiled expression, you need to create an activation, which
+To evaluate a compiled expression, you need to provide bindings for
+variables and then call `eval()`.
+
+you need to create an activation, which
 provides bindings for variables, and then call `eval()`.
 
 ```python
-# Provide variable values in a dictionary.
-activation = cel_env.Activation({"x": 7, "y": 4})
-
-# Evaluate the expression.
-result = expr.eval(activation)
+# Provide variable values in a dictionary and evaluate the expression.
+result = expr.eval(data={"x": 7, "y": 4})
 
 # The result is a `CelValue` object, which contains the result's CEL type and
 # value.
@@ -82,9 +82,32 @@ Result type: BOOL
 Result value: True
 ```
 
+### Using an Activation
+
+The `eval()` function can also be invoked with an `Activation` object that
+holds variable bindings and a pointer to an `Arena` (see below).
+This is particularly useful when multiple expressions need to be evaluated
+with the same set of variable values, such as multiple policies
+on the same server request.
+
+```python
+expr1 = cel_env.compile("user.role in ['admin', 'owner']")
+expr2 = cel_env.compile("user.organization == 'myorg'")
+
+# Provide variable values as an Activation.
+activation = cel_env.Activation({"user": user})
+
+# Evaluate the expression.
+result1 = expr1.eval(activation)
+
+# Evaluate another expression using the same variable bindings
+result2 = expr2.eval(activation)
+```
+
 ### Using an Arena
 
-An `Activation` can also take an `Arena` for memory management during
+The `eval()` function as well as an `Activation` can also take an `Arena`
+for memory management during
 evaluation. This is a memory optimization technique that allows temporary
 C++ objects created during the evaluation to be released as a group. The same
 `Arena` can be shared across multiple activations; just keep in mind that none

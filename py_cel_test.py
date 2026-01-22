@@ -718,6 +718,21 @@ class PyCelTest(absltest.TestCase):
     gc.collect()
     self.assertEqual(cel._InternalArena._get_instance_count(), 0)
 
+  def testImplicitActivation(self):
+    expr = self.env.compile("'Hello, ' + var_str")
+    res = expr.eval(data={"var_str": "World!"})
+    self.assertEqual(res.value(), "Hello, World!")
+
+  def testActivationAndOtherArgs(self):
+    expr = self.env.compile("'Hello, ' + var_str")
+    with self.assertRaises(Exception) as e:
+      expr.eval(
+          self.env.Activation(data={"var_str": "World!"}),
+          data={"var_str": "World!"},
+      )
+    self.assertIn("Cannot provide both activation and any other arguments",
+                  str(e.exception))
+
   def testCompilationErrorHandling(self):
     # Check parser error.
     with self.assertRaises(Exception) as e:
