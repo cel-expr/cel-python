@@ -94,6 +94,11 @@ class PyCelTest(absltest.TestCase):
     act = self.env.Activation(data)
     return expr.eval(act)
 
+  def testSyntaxError(self):
+    with self.assertRaises(Exception) as e:
+      self.env.compile("1 + ")
+    self.assertIn("Syntax error", str(e.exception))
+
   def testUnsetVar(self):
     res = self._eval("var_bool", {})
     self.assertEqual(res.type(), cel.Type.ERROR)
