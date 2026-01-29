@@ -53,7 +53,6 @@
 #include "status_macros.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "pybind11_abseil/status_casters.h"
 
 namespace cel_python {
 
@@ -79,14 +78,13 @@ void PyCelExpression::DefinePythonBindings(py::module& m) {
                  data,
              const std::optional<std::vector<std::shared_ptr<PyCelFunction>>>&
                  functions,
-             const std::shared_ptr<PyCelArena>& arena =
-                 nullptr) -> absl::StatusOr<PyCelValue> {
+             const std::shared_ptr<PyCelArena>& arena = nullptr) -> PyCelValue {
             if (activation) {
               if (data || functions || arena) {
-                return absl::InvalidArgumentError(
-                    "Cannot provide both activation and any other arguments.");
+                throw StatusToException(absl::InvalidArgumentError(
+                    "Cannot provide both activation and any other arguments."));
               }
-              return self.Eval(**activation);
+              return ThrowIfError(self.Eval(**activation));
             }
             std::unordered_map<std::string, PyObject*> data_ptrs;
             if (data) {
@@ -94,11 +92,11 @@ void PyCelExpression::DefinePythonBindings(py::module& m) {
                 data_ptrs[key] = val.ptr();
               }
             }
-            return self.Eval(PyCelActivation(
+            return ThrowIfError(self.Eval(PyCelActivation(
                 self.env_, data_ptrs,
                 functions.value_or(
                     std::vector<std::shared_ptr<PyCelFunction>>{}),
-                arena ? arena : NewArena()));
+                arena ? arena : NewArena())));
           },
           py::arg("activation") = py::none(), py::arg("data") = py::none(),
           py::arg("functions") = py::none(), py::arg("arena") = nullptr);

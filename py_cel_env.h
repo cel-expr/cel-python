@@ -23,7 +23,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "absl/status/statusor.h"
 #include "py_cel_activation.h"
 #include "py_cel_arena.h"
 #include "py_cel_expression.h"
@@ -52,10 +51,11 @@ class PyCelEnv {
 
   ~PyCelEnv();
 
-  absl::StatusOr<PyCelExpression> Compile(const std::string& cel_expr,
-                                          bool disable_check = false);
-  absl::StatusOr<PyCelExpression> Deserialize(
-      const std::string& serialized_expr);
+  // May throw exceptions.
+  PyCelExpression Compile(const std::string& cel_expr,
+                          bool disable_check = false);
+  // May throw exceptions.
+  PyCelExpression Deserialize(const std::string& serialized_expr);
   std::shared_ptr<PyCelActivation> NewActivation(
       const std::unordered_map<std::string, PyObject*>& data,
       const std::vector<std::shared_ptr<PyCelFunction>>& functions,

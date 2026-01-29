@@ -53,8 +53,9 @@ class PyCelType {
   ~PyCelType() = default;
 
   static PyCelType ListType(const PyCelType& element_type);
-  static absl::StatusOr<PyCelType> MapType(const PyCelType& key_type,
-                                           const PyCelType& value_type);
+  // May throw if the key type is not supported.
+  static PyCelType MapType(const PyCelType& key_type,
+                           const PyCelType& value_type);
   static PyCelType TypeType(const PyCelType& parameter);
   static PyCelType AbstractType(const std::string& name,
                                 const std::vector<PyCelType>& params = {});

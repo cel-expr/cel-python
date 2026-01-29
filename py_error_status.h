@@ -16,8 +16,14 @@
 #ifndef THIRD_PARTY_CEL_PYTHON_PY_ERROR_STATUS_H_
 #define THIRD_PARTY_CEL_PYTHON_PY_ERROR_STATUS_H_
 
+#include <stdexcept>
+#include <string>
+#include <utility>
+
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "status_macros.h"
+#include <pybind11/pybind11.h>
 
 #define CEL_PYTHON_ASSIGN_OR_RETURN(...)    \
   PY_CEL_RETURN_IF_ERROR(PyErr_toStatus()); \
@@ -25,6 +31,16 @@
   PY_CEL_RETURN_IF_ERROR(PyErr_toStatus());
 
 namespace cel_python {
+
+std::runtime_error StatusToException(const absl::Status& status);
+
+template <typename T>
+T ThrowIfError(absl::StatusOr<T> status_or) {
+  if (!status_or.ok()) {
+    throw cel_python::StatusToException(status_or.status());
+  }
+  return std::move(*status_or);
+}
 
 absl::Status PyErr_toStatus();
 

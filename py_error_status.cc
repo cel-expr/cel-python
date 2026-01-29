@@ -17,8 +17,11 @@
 
 #include <Python.h>  // IWYU pragma: keep - Needed for PyObject
 
+#include <stdexcept>
+
 #include "absl/base/no_destructor.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/log/absl_check.h"
 #include "absl/log/absl_log.h"  // IWYU pragma: keep - Needed for ABSL_LOG
 #include "absl/status/status.h"
 
@@ -49,6 +52,40 @@ static absl::Status PyErrorToStatus(PyObject* py_type, PyObject* py_error) {
     return absl::UnknownError(message);
   }
   return absl::Status(it->second, message);
+}
+
+// A custom exception type that can be thrown from C++ to Python.
+// This allows us to propagate absl::Status through pybind11 without introducing
+// a dependency on pybind11_abseil:status_casters.
+class PyCelError : public pybind11::builtin_exception {
+ public:
+  explicit PyCelError(const absl::Status& status)
+      : builtin_exception(status.ToString() + " [" +
+                          absl::StatusCodeToString(status.code()) + "]") {
+    switch (status.code()) {
+      case absl::StatusCode::kInvalidArgument:
+      case absl::StatusCode::kOutOfRange:
+        py_err_type_ = PyExc_ValueError;
+        break;
+      case absl::StatusCode::kNotFound:
+        py_err_type_ = PyExc_LookupError;
+        break;
+      default:
+        py_err_type_ = PyExc_RuntimeError;
+        break;
+    }
+  }
+
+  void set_error() const override { PyErr_SetString(py_err_type_, what()); }
+
+ private:
+  PyObject* py_err_type_;
+};
+
+std::runtime_error StatusToException(const absl::Status& status) {
+  ABSL_CHECK(!status.ok());  // Crash OK: all call sites are
+                             // local to the library.
+  return PyCelError(status);
 }
 
 static absl::Status& PendingPyError() {

@@ -37,7 +37,6 @@
 #include "status_macros.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "pybind11_abseil/status_casters.h"
 
 namespace cel_python {
 
@@ -56,7 +55,7 @@ static std::shared_ptr<PyCelEnvInternal> GetEnvFromContext(
 
 void PyCelFunction::DefinePythonBindings(pybind11::module& m) {
   py::class_<PyCelFunction, std::shared_ptr<PyCelFunction>>(m, "Function")
-      .def(py::init<std::string, std::vector<PyCelType>, bool, PyObject*,
+      .def(py::init<std::string, std::vector<PyCelType>, bool, py::object,
                     PyCelType>(),
            py::arg("function_name"), py::arg("parameters"),
            py::arg("is_member"), py::arg("impl"),
@@ -65,36 +64,21 @@ void PyCelFunction::DefinePythonBindings(pybind11::module& m) {
 
 PyCelFunction::PyCelFunction(std::string function_name,
                              std::vector<PyCelType> parameters, bool is_member,
-                             PyObject* impl, PyCelType return_type)
+                             py::object impl, PyCelType return_type)
     : function_name_(std::move(function_name)),
       return_type_(std::move(return_type)),
       parameters_(std::move(parameters)),
       is_member_(is_member),
-      impl_(impl) {
+      impl_(std::move(impl)) {
   ABSL_CHECK(PyGILState_Check());
-  Py_XINCREF(impl_);
 }
-
-PyCelFunction::~PyCelFunction() {
-  auto gil_state = PyGILState_Ensure();
-  Py_XDECREF(impl_);
-  PyGILState_Release(gil_state);
-};
 
 PyCelFunctionAdapter::PyCelFunctionAdapter(std::string function_name,
                                            PyCelType return_type,
-                                           PyObject* py_function)
+                                           py::object py_function)
     : function_name_(std::move(function_name)),
       return_type_(std::move(return_type)),
-      py_function_(py_function) {
-  Py_XINCREF(py_function_);
-}
-
-PyCelFunctionAdapter::~PyCelFunctionAdapter() {
-  auto gil_state = PyGILState_Ensure();
-  Py_XDECREF(py_function_);
-  PyGILState_Release(gil_state);
-}
+      py_function_(std::move(py_function)) {}
 
 absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
     absl::Span<const cel::Value> args,
@@ -110,7 +94,7 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
                     CelValueToPyObject(args[i], env, py_arena,
                                        /*plain_value=*/true));
   }
-  PyObject* result = PyObject_CallObject(py_function_, py_args);
+  PyObject* result = PyObject_CallObject(py_function_.ptr(), py_args);
   absl::Status status = PyErr_toStatus();
   if (!status.ok()) {
     return cel::ErrorValue(status);
@@ -119,8 +103,9 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
   return PyObjectToCelValue(
       result, return_type_,
       [this]() {
-        return absl::StrFormat("Python function '%s'",
-                               PyUnicode_AsUTF8(PyObject_Repr(py_function_)));
+        return absl::StrFormat(
+            "Python function '%s'",
+            PyUnicode_AsUTF8(PyObject_Repr(py_function_.ptr())));
       },
       env, context.arena());
 };

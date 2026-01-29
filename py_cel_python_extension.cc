@@ -112,7 +112,7 @@ absl::Status PyCelPythonExtension::ConfigureRuntime(
 
       cel::FunctionDescriptor descriptor(function.name(), overload.is_member(),
                                          types, kFunctionDescriptorOptions);
-      if (overload.py_function()) {
+      if (!overload.py_function().is_none()) {
         PY_CEL_RETURN_IF_ERROR(runtime_builder.function_registry().Register(
             descriptor, std::make_unique<PyCelFunctionAdapter>(
                             function.name(), overload.return_type(),

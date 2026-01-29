@@ -30,6 +30,8 @@
 
 namespace cel_python {
 
+namespace py = ::pybind11;
+
 class PyCelArena;
 class PyCelEnvInternal;
 class PyMessageFactory;

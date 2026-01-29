@@ -23,12 +23,10 @@
 #include "py_cel_type.h"
 #include "py_cel_value.h"
 #include <pybind11/pybind11.h>
-#include "pybind11_abseil/import_status_module.h"
 
 namespace cel_python {
 
 PYBIND11_MODULE(py_cel, m) {
-  pybind11::google::ImportStatusModule();
   m.doc() = "Python bindings for CEL.";
 
   PyCelArena::DefinePythonBindings(m);

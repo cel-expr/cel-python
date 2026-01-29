@@ -22,7 +22,6 @@
 #include "py_cel_type.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "pybind11_abseil/status_casters.h"
 
 namespace cel_python {
 
@@ -33,50 +32,23 @@ void PyCelOverload::DefinePythonBindings(py::module_& m) {
       .def(py::init([](const std::string& overload_id,
                        const PyCelType& return_type,
                        const std::vector<PyCelType>& parameters, bool is_member,
-                       PyObject* impl) {
+                       py::object impl) {
              return PyCelOverload(overload_id, return_type, parameters,
-                                  is_member, impl != Py_None ? impl : nullptr);
+                                  is_member, std::move(impl));
            }),
            py::arg("overload_id"), py::arg("return_type"),
            py::arg("parameters"), py::arg("is_member") = false,
-           py::arg("impl") = nullptr);
+           py::arg("impl") = py::none());
 }
 
 PyCelOverload::PyCelOverload(std::string overload_id,
                              const PyCelType& return_type,
                              std::vector<PyCelType> parameters, bool is_member,
-                             PyObject* py_function)
+                             py::object py_function)
     : overload_id_(std::move(overload_id)),
       return_type_(return_type),
       parameters_(std::move(parameters)),
       is_member_(is_member),
-      py_function_(py_function) {
-  Py_XINCREF(py_function_);
-}
-
-PyCelOverload::PyCelOverload(const PyCelOverload& other) {
-  overload_id_ = other.overload_id_;
-  return_type_ = other.return_type_;
-  parameters_ = other.parameters_;
-  is_member_ = other.is_member_;
-  py_function_ = other.py_function_;
-  Py_XINCREF(py_function_);
-};
-
-PyCelOverload& PyCelOverload::operator=(const PyCelOverload& other) {
-  overload_id_ = other.overload_id_;
-  return_type_ = other.return_type_;
-  parameters_ = other.parameters_;
-  is_member_ = other.is_member_;
-  py_function_ = other.py_function_;
-  Py_XINCREF(py_function_);
-  return *this;
-}
-
-PyCelOverload::~PyCelOverload() {
-  auto gil_state = PyGILState_Ensure();
-  Py_XDECREF(py_function_);
-  PyGILState_Release(gil_state);
-}
+      py_function_(std::move(py_function)) {}
 
 }  // namespace cel_python

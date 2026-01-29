@@ -29,6 +29,8 @@
 
 namespace cel_python {
 
+namespace py = ::pybind11;
+
 class PyCelEnvInternal;
 
 // Wrapper for a Python function that implements a CEL late-bound function.
@@ -38,13 +40,12 @@ class PyCelFunction {
   static void DefinePythonBindings(pybind11::module& m);
 
   PyCelFunction(std::string function_name, std::vector<PyCelType> parameters,
-                bool is_member, PyObject* impl, PyCelType return_type);
-  ~PyCelFunction();
+                bool is_member, py::object impl, PyCelType return_type);
 
   std::string function_name() const { return function_name_; }
   const std::vector<PyCelType>& parameters() const { return parameters_; }
   bool is_member() const { return is_member_; }
-  PyObject* impl() const { return impl_; }
+  py::object impl() const { return impl_; }
   const PyCelType& return_type() const { return return_type_; }
 
  private:
@@ -52,7 +53,7 @@ class PyCelFunction {
   PyCelType return_type_;
   std::vector<PyCelType> parameters_;
   bool is_member_;
-  PyObject* impl_;
+  py::object impl_;
 };
 
 // Internal wrapper for a Python function that implements a CEL extension
@@ -60,8 +61,7 @@ class PyCelFunction {
 class PyCelFunctionAdapter : public cel::Function {
  public:
   PyCelFunctionAdapter(std::string function_name, PyCelType return_type,
-                       PyObject* py_function);
-  ~PyCelFunctionAdapter() override;
+                       py::object py_function);
 
   absl::StatusOr<cel::Value> Invoke(
       absl::Span<const cel::Value> args,
@@ -70,7 +70,7 @@ class PyCelFunctionAdapter : public cel::Function {
  private:
   std::string function_name_;
   PyCelType return_type_;
-  PyObject* py_function_;
+  py::object py_function_;
 };
 
 }  // namespace cel_python

@@ -48,7 +48,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include "pybind11_abseil/absl_casters.h"
-#include "pybind11_abseil/status_casters.h"
 
 namespace cel_python {
 
@@ -57,9 +56,14 @@ namespace py = ::pybind11;
 void PyCelValue::DefinePythonBindings(py::module& m) {
   py::class_<PyCelValue>(m, "Value")
       .def("type", &PyCelValue::Type)
-      .def("value", &PyCelValue::Value, py::return_value_policy::reference)
-      .def("plain_value", &PyCelValue::PlainValue,
-           py::return_value_policy::reference)
+      .def("value",
+           [](PyCelValue& self) {
+             return py::reinterpret_borrow<py::object>(self.Value());
+           })
+      .def("plain_value",
+           [](PyCelValue& self) {
+             return py::reinterpret_borrow<py::object>(self.PlainValue());
+           })
       .def("__repr__", &PyCelValue::ToString);
 
   py::class_<PyCelListItemAccessor, PyCelValue>(m, "_CelListItemAccessor");

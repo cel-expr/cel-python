@@ -90,8 +90,6 @@ pybind_extension(
         "@com_google_cel_spec//proto/cel/expr:syntax_cc_proto",
         "@com_google_protobuf//:protobuf",
         "@pybind11_abseil//pybind11_abseil:absl_casters",
-        "@pybind11_abseil//pybind11_abseil:import_status_module",
-        "@pybind11_abseil//pybind11_abseil:status_casters",
     ],
 )
 

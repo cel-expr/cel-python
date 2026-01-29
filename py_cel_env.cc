@@ -24,15 +24,14 @@
 #include <vector>
 
 #include "absl/log/absl_check.h"
-#include "absl/status/statusor.h"
 #include "py_cel_activation.h"
 #include "py_cel_arena.h"
 #include "py_cel_env_internal.h"
 #include "py_cel_expression.h"
 #include "py_cel_type.h"
+#include "py_error_status.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "pybind11_abseil/status_casters.h"
 
 namespace cel_python {
 
@@ -121,14 +120,13 @@ std::shared_ptr<PyCelActivation> PyCelEnv::NewActivation(
   return std::make_shared<PyCelActivation>(env_, data, functions, arena);
 }
 
-absl::StatusOr<PyCelExpression> PyCelEnv::Compile(const std::string& cel_expr,
-                                                  bool disable_check) {
-  return PyCelExpression::Compile(env_, cel_expr, disable_check);
+PyCelExpression PyCelEnv::Compile(const std::string& cel_expr,
+                                  bool disable_check) {
+  return ThrowIfError(PyCelExpression::Compile(env_, cel_expr, disable_check));
 }
 
-absl::StatusOr<PyCelExpression> PyCelEnv::Deserialize(
-    const std::string& serialized_expr) {
-  return PyCelExpression::Deserialize(env_, serialized_expr);
+PyCelExpression PyCelEnv::Deserialize(const std::string& serialized_expr) {
+  return ThrowIfError(PyCelExpression::Deserialize(env_, serialized_expr));
 }
 
 }  // namespace cel_python

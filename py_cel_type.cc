@@ -41,7 +41,6 @@
 #include "google/protobuf/descriptor.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "pybind11_abseil/status_casters.h"
 
 namespace cel_python {
 
@@ -106,15 +105,15 @@ PyCelType PyCelType::ListType(const PyCelType& element_type) {
   return PyCelType(cel::Kind::kList, "LIST", {element_type});
 }
 
-absl::StatusOr<PyCelType> PyCelType::MapType(const PyCelType& key_type,
-                                             const PyCelType& value_type) {
+PyCelType PyCelType::MapType(const PyCelType& key_type,
+                             const PyCelType& value_type) {
   if (key_type.GetKind() != cel::Kind::kBool &&
       key_type.GetKind() != cel::Kind::kInt &&
       key_type.GetKind() != cel::Kind::kUint &&
       key_type.GetKind() != cel::Kind::kString &&
       key_type.GetKind() != cel::Kind::kDyn) {
-    return absl::InvalidArgumentError(
-        absl::StrFormat("Unsupported map key type: %s", key_type.GetName()));
+    throw StatusToException(absl::InvalidArgumentError(
+        absl::StrFormat("Unsupported map key type: %s", key_type.GetName())));
   }
 
   return PyCelType(cel::Kind::kMap, "MAP", {key_type, value_type});
@@ -230,7 +229,7 @@ const PyCelType& PyCelType::List() {
 // cel.Type.Map(cel.Type.DYN, cel.Type.DYN) aka cel.Type.MAP
 const PyCelType& PyCelType::Map() {
   static const absl::NoDestructor<PyCelType> kInternalType(
-      *PyCelType::MapType(PyCelType::Dyn(), PyCelType::Dyn()));
+      PyCelType::MapType(PyCelType::Dyn(), PyCelType::Dyn()));
   return *kInternalType;
 }
 

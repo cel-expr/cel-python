@@ -25,30 +25,31 @@
 
 namespace cel_python {
 
+namespace py = ::pybind11;
+
 class PyCelOverload {
  public:
   static void DefinePythonBindings(pybind11::module& m);
 
-  PyCelOverload(const PyCelOverload&);
-  PyCelOverload& operator=(const PyCelOverload&);
+  PyCelOverload(const PyCelOverload&) = default;
+  PyCelOverload& operator=(const PyCelOverload&) = default;
 
   PyCelOverload(std::string overload_id, const PyCelType& return_type,
                 std::vector<PyCelType> parameters, bool is_member = false,
-                PyObject* py_function = nullptr);
-  ~PyCelOverload();
+                py::object py_function = py::none());
 
   std::string overload_id() const { return overload_id_; }
   PyCelType return_type() const { return return_type_; }
   const std::vector<PyCelType>& parameters() const { return parameters_; }
   bool is_member() const { return is_member_; }
-  PyObject* py_function() const { return py_function_; }
+  py::object py_function() const { return py_function_; }
 
  private:
   std::string overload_id_;
   PyCelType return_type_;
   std::vector<PyCelType> parameters_;
   bool is_member_;
-  PyObject* py_function_ = nullptr;
+  py::object py_function_ = py::none();
 };
 
 }  // namespace cel_python

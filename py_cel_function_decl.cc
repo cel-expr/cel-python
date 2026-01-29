@@ -21,8 +21,6 @@
 #include "py_cel_overload.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include "pybind11_abseil/absl_casters.h"
-#include "pybind11_abseil/status_casters.h"
 
 namespace cel_python {
 
