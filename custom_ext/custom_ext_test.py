@@ -14,8 +14,6 @@
 
 """Test for CEL extensions."""
 
-from typing import Callable
-
 from google.protobuf import descriptor_pool
 
 from absl.testing import absltest
@@ -30,20 +28,19 @@ class CustomExtTest(parameterized.TestCase):
   # Execute the same test for both C++ and Python implementations, which
   # are expected to produce identical results.
   EXT_IMPLEMENTATIONS = [
-      ("py_ext", sample_cel_ext.SampleCelExtension),
-      ("cc_ext", sample_cel_ext_cc.SampleCelExtension),
+      ("py_ext", sample_cel_ext.SampleCelExtension()),
+      ("cc_ext", sample_cel_ext_cc.SampleCelExtension()),
   ]
 
-  # TODO(b/462745713): reuse the same extension instance for all tests.
   def _compile_expr(
-      self, ext: Callable[[], cel.CelExtension], expression: str
+      self, ext: cel.CelExtension, expression: str
   ) -> cel.Expression:
     """Creates a CEL expression for the given extension and compiles the expression."""
     self.descriptor_pool = descriptor_pool.Default()
     self.env = cel.NewEnv(
         self.descriptor_pool,
         variables={},
-        extensions=[ext()],
+        extensions=[ext],
     )
     return self.env.compile(expression)
 
@@ -161,7 +158,7 @@ class CustomExtTest(parameterized.TestCase):
   def test_bad_extension_type(self):
     with self.assertRaises(Exception) as e:
       self._compile_expr(
-          lambda: "Not a CelExtension", "'Hello, world!'.translate('en', 'es')"
+          "Not a CelExtension", "'Hello, world!'.translate('en', 'es')"
       )
     assert "Failed to cast str either as a Python CelExtension instance" in str(
         e.exception
@@ -170,9 +167,7 @@ class CustomExtTest(parameterized.TestCase):
 
   def test_none_extension(self):
     with self.assertRaises(Exception) as e:
-      self._compile_expr(
-          lambda: None, "'Hello, world!'.translate('en', 'es')"
-      )
+      self._compile_expr(None, "'Hello, world!'.translate('en', 'es')")
     assert "Provided extension is None" in str(e.exception)
 
 
@@ -190,6 +185,7 @@ def _lost_in_translation_return_none(arg1: str) -> str:  # pylint: disable=unuse
 
 def _lost_in_translation_raising_error(text: str) -> str:  # pylint: disable=unused-argument
   raise LookupError("Lost in translation")
+
 
 TEST_EXPRESSIONS = [
     ("getOrDefaultReceiver", "{'a': 1, 'b': 2}.getOrDefault('c', 3) == 3"),
@@ -223,6 +219,47 @@ class PythonTypeMappingsTest(parameterized.TestCase):
     res = compiled_expr.eval(act)
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn("t must be between 0.0 and 1.0", res.value())
+
+
+class OverloadExistingFunctionTest(absltest.TestCase):
+
+  def test_overload_existing_function(self):
+    env = cel.NewEnv(
+        variables={"var_map": cel.Type.Map(cel.Type.STRING, cel.Type.DYN)},
+        extensions=[
+            cel.CelExtension(
+                "custom_map_functions",
+                functions=[
+                    cel.FunctionDecl(
+                        "contains",
+                        [
+                            cel.Overload(
+                                "contains_key_value",
+                                return_type=cel.Type.BOOL,
+                                parameters=[
+                                    cel.Type.Map(cel.Type.STRING, cel.Type.DYN),
+                                    cel.Type.STRING,
+                                    cel.Type.DYN,
+                                ],
+                                is_member=True,
+                                impl=contains_key_value,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+    expr = env.compile("var_map.contains('foo', 'bar')")
+
+    res = expr.eval(data={"var_map": {"foo": "bar"}})
+    self.assertTrue(res.value())
+    res = expr.eval(data={"var_map": {"foo": "baz"}})
+    self.assertFalse(res.value())
+
+
+def contains_key_value(cel_map, key, value):
+  return key in cel_map and cel_map[key] == value
 
 
 if __name__ == "__main__":

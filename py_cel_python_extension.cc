@@ -88,7 +88,7 @@ absl::Status PyCelPythonExtension::ConfigureCompiler(
           function_decl.AddOverload(std::move(overload_decl)));
     }
     PY_CEL_RETURN_IF_ERROR(
-        compiler_builder.GetCheckerBuilder().AddFunction(function_decl));
+        compiler_builder.GetCheckerBuilder().MergeFunction(function_decl));
   }
 
   return absl::OkStatus();
