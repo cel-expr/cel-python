@@ -16,6 +16,7 @@
 
 #include <Python.h>  // IWYU pragma: keep - Needed for PyObject
 
+#include <exception>
 #include <memory>
 #include <optional>
 #include <string>
@@ -45,12 +46,18 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
          std::optional<std::unordered_map<std::string, PyCelType>> variables,
          std::optional<std::vector<py::object>> extensions,
          const std::optional<std::string>& container) {
-        PyObject* pool_ptr = nullptr;
+        PyObject* pool_ptr;
         if (descriptor_pool.is_none()) {
           // Replicates python's `descriptor_pool.Default()`
-          pool_ptr = py::module::import("google.protobuf.descriptor_pool")
-                         .attr("Default")()
-                         .ptr();
+          try {
+            pool_ptr = py::module::import("google.protobuf.descriptor_pool")
+                           .attr("Default")()
+                           .ptr();
+          } catch (const std::exception& e) {
+            // google.protobuf.descriptor_pool is not available.
+            pool_ptr = nullptr;
+            PyErr_Clear();  // Clear the Python error state.
+          }
         } else {
           pool_ptr = descriptor_pool.ptr();
         }

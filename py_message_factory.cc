@@ -26,7 +26,7 @@ namespace cel_python {
 
 PyMessageFactory::PyMessageFactory(PyObject* descriptor_pool) {
   py_descriptor_pool_ = descriptor_pool;
-  Py_INCREF(py_descriptor_pool_);
+  Py_XINCREF(py_descriptor_pool_);
   PyObject* pName =
       PyUnicode_DecodeFSDefault("google.protobuf.message_factory");
   PyObject* pModule = PyImport_Import(pName);
@@ -45,7 +45,7 @@ PyMessageFactory::PyMessageFactory(PyObject* descriptor_pool) {
 
 PyMessageFactory::~PyMessageFactory() {
   auto gil_state = PyGILState_Ensure();
-  Py_DECREF(py_descriptor_pool_);
+  Py_XDECREF(py_descriptor_pool_);
   Py_XDECREF(py_func_GetMessageClass_);
   Py_XDECREF(py_func_MergeFromString_);
   for (auto const& [key, py_obj] : message_classes_) {
@@ -55,6 +55,13 @@ PyMessageFactory::~PyMessageFactory() {
 }
 
 PyObject* PyMessageFactory::GetMessageClass(const std::string& message_type) {
+  if (py_descriptor_pool_ == nullptr) {
+    PyErr_Format(PyExc_TypeError,
+                 "Message type not found: %s, descriptor pool is unavailable.",
+                 message_type.c_str());
+    return nullptr;
+  }
+
   auto it = message_classes_.find(message_type);
   if (it != message_classes_.end()) {
     return it->second;

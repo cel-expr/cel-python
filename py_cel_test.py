@@ -16,6 +16,9 @@
 
 import datetime
 import gc
+import importlib
+import importlib.abc
+import sys
 
 from google.protobuf import duration_pb2 as duration_pb
 from google.protobuf import timestamp_pb2 as timestamp_pb
@@ -730,8 +733,10 @@ class PyCelTest(absltest.TestCase):
           self.env.Activation(data={"var_str": "World!"}),
           data={"var_str": "World!"},
       )
-    self.assertIn("Cannot provide both activation and any other arguments",
-                  str(e.exception))
+    self.assertIn(
+        "Cannot provide both activation and any other arguments",
+        str(e.exception),
+    )
 
   def testCompilationErrorHandling(self):
     # Check parser error.
@@ -797,6 +802,104 @@ class _BadDescriptorPool:
 
   def FindFileContainingSymbol(self, symbol_name: str):  # pylint: disable=invalid-name
     raise LookupError("Could not find file containing symbol: %s" % symbol_name)
+
+
+class PyCelWithoutProtoSupportTest(absltest.TestCase):
+  """Test that the environment can be created without proto support."""
+
+  def setUp(self):
+    super().setUp()
+    self.msg = test_all_types_pb.TestAllTypes()
+    self.msg.single_string = "Hey"
+
+    # "Unimport" descriptor_pool if it is already imported.
+    if "google.protobuf.descriptor_pool" in sys.modules:
+      del sys.modules["google.protobuf.descriptor_pool"]
+
+    # Make it impossible to import descriptor_pool.
+    class UnluckyFinder(importlib.abc.MetaPathFinder):
+
+      def find_spec(self, fullname, unused_path, unused_target=None):
+        if fullname == "google.protobuf.descriptor_pool":
+          raise ImportError("Not found")
+        return None
+
+    sys.meta_path.insert(0, UnluckyFinder())
+
+  def tearDown(self):
+    # Remove the unlucky finder from the meta path.
+    sys.meta_path.pop(0)
+    super().tearDown()
+
+  def testEvalWithNonProtoTypes(self):
+    cel_env = cel.NewEnv(
+        descriptor_pool=None,
+        variables={
+            "var_str": cel.Type.STRING,
+            "var_map": cel.Type.Map(cel.Type.STRING, cel.Type.STRING),
+            "var_list": cel.Type.List(cel.Type.STRING),
+        },
+    )
+    data = {
+        "var_str": "foo",
+        "var_map": {"key": "bar"},
+        "var_list": ["foo", "bar", "baz"],
+    }
+    res = cel_env.compile("var_str").eval(data=data)
+    self.assertEqual(res.value(), "foo")
+
+    res = cel_env.compile("var_map['key']").eval(data=data)
+    self.assertEqual(res.value(), "bar")
+
+    res = cel_env.compile("var_list[2]").eval(data=data)
+    self.assertEqual(res.value(), "baz")
+
+  def testErrorOnProtoAccess(self):
+    cel_env = cel.NewEnv(
+        descriptor_pool=None,
+        variables={
+            "var_proto": cel.Type.DYN,
+        },
+    )
+    res = cel_env.compile("var_proto.single_string").eval(
+        data={"var_proto": self.msg}
+    )
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn(
+        "Descriptor not found for message type"
+        " 'cel.expr.conformance.proto2.TestAllTypes'",
+        str(res.value()),
+    )
+
+    with self.assertRaises(Exception) as e:
+      cel_env.compile(
+          "cel.expr.conformance.proto2.TestAllTypes{single_string: 'hello'}"
+      ).eval()
+    self.assertIn(
+        "undeclared reference to 'cel.expr.conformance.proto2.TestAllTypes'",
+        str(e.exception),
+    )
+
+  def testErrorOnProtoCreation(self):
+    cel_env = cel.NewEnv(
+        descriptor_pool=None,
+        variables={
+            "var_proto": cel.Type.DYN,
+        },
+    )
+    # Disable type checking to allow the compilation to succeed.
+    expr = cel_env.compile(
+        "cel.expr.conformance.proto2.TestAllTypes{single_string: 'hello'}",
+        disable_check=True,
+    )
+
+    with self.assertRaises(Exception) as e:
+      expr.eval()
+    self.assertIn(
+        "Invalid struct creation: missing type info for"
+        " 'cel.expr.conformance.proto2.TestAllTypes'",
+        str(e.exception),
+    )
 
 
 if __name__ == "__main__":

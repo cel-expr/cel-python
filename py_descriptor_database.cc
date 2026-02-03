@@ -32,12 +32,12 @@ PyDescriptorDatabase::PyDescriptorDatabase(PyObject* py_descriptor_pool)
     : py_descriptor_pool_(py_descriptor_pool),
       standard_pool_(cel::GetMinimalDescriptorPool()) {
   ABSL_CHECK(PyGILState_Check());
-  Py_INCREF(py_descriptor_pool_);
+  Py_XINCREF(py_descriptor_pool_);
 }
 
 PyDescriptorDatabase::~PyDescriptorDatabase() {
   auto gil_state = PyGILState_Ensure();
-  Py_DECREF(py_descriptor_pool_);
+  Py_XDECREF(py_descriptor_pool_);
   PyGILState_Release(gil_state);
 }
 
@@ -50,6 +50,10 @@ bool PyDescriptorDatabase::FindFileByName(StringViewArg filename,
   if (file != nullptr) {
     file->CopyTo(output);
     return true;
+  }
+
+  if (py_descriptor_pool_ == nullptr) {
+    return false;
   }
 
   PyObject* pyfile = PyObject_CallMethod(
@@ -98,6 +102,10 @@ bool PyDescriptorDatabase::FindFileContainingSymbol(
     return true;
   }
 
+  if (py_descriptor_pool_ == nullptr) {
+    return false;
+  }
+
   PyObject* pyfile = PyObject_CallMethod(
       py_descriptor_pool_, "FindFileContainingSymbol", "s#", symbol_name.data(),
       static_cast<Py_ssize_t>(symbol_name.size()));
@@ -137,6 +145,10 @@ bool PyDescriptorDatabase::FindFileContainingSymbol(
 bool PyDescriptorDatabase::FindFileContainingExtension(
     StringViewArg containing_type, int field_number,
     google::protobuf::FileDescriptorProto* output) {
+  if (py_descriptor_pool_ == nullptr) {
+    return false;
+  }
+
   ABSL_CHECK(PyGILState_Check());
   PyObject* py_containing_type = PyObject_CallMethod(
       py_descriptor_pool_, "FindMessageTypeByName", "s#",
