@@ -812,15 +812,16 @@ class PyCelWithoutProtoSupportTest(absltest.TestCase):
     self.msg = test_all_types_pb.TestAllTypes()
     self.msg.single_string = "Hey"
 
-    # "Unimport" descriptor_pool if it is already imported.
-    if "google.protobuf.descriptor_pool" in sys.modules:
-      del sys.modules["google.protobuf.descriptor_pool"]
+    # "Unimport" any google.protobuf modules if they are already imported.
+    for module_name in list(sys.modules):
+      if module_name.startswith("google.protobuf"):
+        del sys.modules[module_name]
 
     # Make it impossible to import descriptor_pool.
     class UnluckyFinder(importlib.abc.MetaPathFinder):
 
       def find_spec(self, fullname, unused_path, unused_target=None):
-        if fullname == "google.protobuf.descriptor_pool":
+        if fullname.startswith("google.protobuf."):
           raise ImportError("Not found")
         return None
 

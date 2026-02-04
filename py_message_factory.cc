@@ -26,6 +26,10 @@ namespace cel_python {
 
 PyMessageFactory::PyMessageFactory(PyObject* descriptor_pool) {
   py_descriptor_pool_ = descriptor_pool;
+  if (py_descriptor_pool_ == nullptr) {
+    return;
+  }
+
   Py_XINCREF(py_descriptor_pool_);
   PyObject* pName =
       PyUnicode_DecodeFSDefault("google.protobuf.message_factory");
@@ -44,6 +48,10 @@ PyMessageFactory::PyMessageFactory(PyObject* descriptor_pool) {
 }
 
 PyMessageFactory::~PyMessageFactory() {
+  if (py_descriptor_pool_ == nullptr) {
+    return;
+  }
+
   auto gil_state = PyGILState_Ensure();
   Py_XDECREF(py_descriptor_pool_);
   Py_XDECREF(py_func_GetMessageClass_);
@@ -91,6 +99,10 @@ PyObject* PyMessageFactory::GetMessageClass(const std::string& message_type) {
 
 PyObject* PyMessageFactory::FromString(const std::string& message_type,
                                        const std::string& serialized_proto) {
+  if (py_descriptor_pool_ == nullptr) {
+    return nullptr;
+  }
+
   ABSL_CHECK(PyGILState_Check());
   PyObject* message_class = GetMessageClass(message_type);
   if (!message_class) {
