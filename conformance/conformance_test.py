@@ -27,13 +27,13 @@ from cel.expr import checked_pb2 as checked_pb
 from cel.expr import value_pb2 as value_pb
 from absl.testing import absltest
 from python.runfiles import runfiles
-import py_cel as cel
-from ext import ext_bindings
-from ext import ext_encoders
-from ext import ext_math
-from ext import ext_optional
-from ext import ext_proto
-from ext import ext_string
+from py_cel import py_cel as cel
+from py_cel.ext import ext_bindings
+from py_cel.ext import ext_encoders
+from py_cel.ext import ext_math
+from py_cel.ext import ext_optional
+from py_cel.ext import ext_proto
+from py_cel.ext import ext_string
 from cel.expr.conformance.proto2 import test_all_types_extensions_pb2 as test_all_types_extensions_proto2  # pylint: disable=unused-import
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_proto2  # pylint: disable=unused-import
 from cel.expr.conformance.proto3 import test_all_types_pb2 as test_all_types_proto3  # pylint: disable=unused-import
@@ -65,6 +65,13 @@ class ConformanceTestSuite(unittest.TestSuite):
       "parse/bytes_literals/triple_single_quoted_unescaped_punctuation",
       "parse/string_literals/triple_double_quoted_unescaped_punctuation",
       "parse/string_literals/triple_single_quoted_unescaped_punctuation",
+      # TODO(b/481818110): fix support for optional types.
+      "optionals/optionals/empty_struct_optindex_hasValue",
+      "optionals/optionals/optional_empty_struct_optindex_hasValue",
+      "optionals/optionals/optional_struct_optindex_index_value",
+      "optionals/optionals/optional_struct_optindex_index_value",
+      "optionals/optionals/optional_struct_optindex_value",
+      "optionals/optionals/struct_optindex_value",
   ]
 
   def __init__(self):
@@ -89,7 +96,7 @@ class ConformanceTestSuite(unittest.TestSuite):
     them to the test suite.
     """
     testfiles = self._all_test_files(
-        "google3/third_party/cel/spec/tests/simple/testdata"
+        "cel-spec+/tests/simple/testdata"
     )
 
     for testfile in testfiles:

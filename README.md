@@ -7,7 +7,7 @@ This is a Python wrapper for the CEL C++ implementation.
 ### Importing CEL module
 
 ```python
-import py_cel
+from py_cel import py_cel
 ```
 
 ### Creating and configuring Cel

@@ -8,12 +8,12 @@ pybind_extension(
     name = "sample_cel_ext_cc",
     srcs = ["sample_cel_ext.cc"],
     data = [
-        "//:py_cel",
+        "//py_cel",
     ],
     deps = [
-        "//:py_cel",
-        "//:py_cel_extension",
-        "//:status_macros",
+        "//py_cel",
+        "//py_cel:py_cel_extension",
+        "//py_cel:status_macros",
         "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -33,7 +33,7 @@ py_library(
     name = "sample_cel_ext_py",
     srcs = ["sample_cel_ext.py"],
     deps = [
-        "//:py_cel",
+        "//py_cel",
     ],
 )
 
@@ -43,7 +43,7 @@ py_test(
     deps = [
         ":sample_cel_ext_cc",
         ":sample_cel_ext_py",
-        "//:py_cel",
+        "//py_cel",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
         "@com_google_protobuf//:protobuf_python",

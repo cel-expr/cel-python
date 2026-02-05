@@ -16,7 +16,7 @@
 
 from typing import Any
 
-import py_cel as cel
+from py_cel import py_cel as cel
 
 
 class SampleCelExtension(cel.CelExtension):
