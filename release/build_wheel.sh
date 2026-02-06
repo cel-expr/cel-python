@@ -27,7 +27,7 @@ cp "${SRC_DIR}"/release/* .
 sed -i "s/\$VERSION/${VERSION}/g" pyproject.toml
 
 echo "Running cibuildwheel: ${CIBWHEEL_BIN}"
-"${CIBWHEEL_BIN}"
+"${CIBWHEEL_BIN}" "$@"
 
 echo "Copying generated wheels to ${SRC_DIR}/wheelhouse"
 mkdir -p "${SRC_DIR}"/wheelhouse

@@ -53,5 +53,8 @@ bazel_dep(name = "rules_proto", version = "7.1.0")
 # https://registry.bazel.build/modules/rules_python
 bazel_dep(name = "rules_python", version = "1.7.0")
 
-python = use_extension("@pybind11_bazel//:python/python.bzl", "python")
-python.toolchain(python_version = "3.11")
+python_rules = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python_rules.toolchain(
+    is_default = True,
+    python_version = "3.11",
+)

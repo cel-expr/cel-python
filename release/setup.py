@@ -17,6 +17,7 @@
 import os
 import shutil
 import subprocess
+import sys
 import setuptools
 import setuptools.command.build_ext
 
@@ -40,6 +41,24 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
       self.build_extension(ext)
 
   def build_extension(self, ext):
+    # cibuildwheel executes setup.py using the target Python version.
+    # Thus, we can use the current Python version as the target version for
+    # the bazel build.
+    python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+    print(f'Building for target Python version: {python_version}')
+
+    module_bazel_path = os.path.join(os.path.dirname(__file__), 'MODULE.bazel')
+    if os.path.exists(module_bazel_path):
+      sed_command = (
+          "sed -i 's/python_version\\s*=\\s*\".*\"/"
+          f"python_version = \"{python_version}\"/' {module_bazel_path}"
+      )
+      subprocess.check_call(sed_command, shell=True)
+    else:
+      raise RuntimeError(
+          f'MODULE.bazel not found at {module_bazel_path}'
+      )
+
     dest_path = self.get_ext_fullpath(ext.name)
     dest_dir = os.path.dirname(dest_path)
     os.makedirs(dest_dir, exist_ok=True)

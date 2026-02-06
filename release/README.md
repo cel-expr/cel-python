@@ -25,17 +25,22 @@ To build the py_cel wheel locally for testing:
 - Update release version
   Edit `release/build_wheel.sh`: update `VERSION`
 
-- Run `cibuildwheel`
+- Run `release/build_wheel.sh`
 
   ```
-  cibuildwheel
+  release/build_wheel.sh
+  ```
+
+  Optionally, provide the signature of a specific target configuration, e.g.
+
+  ```
+  release/build_wheel.sh --only "cp311-manylinux_x86_64"
   ```
 
 - Install the resulting wheel:
 
   ```
-  pip uninstall py-cel
-  pip install wheelhouse/py_cel-*.whl
+  pip install --force-reinstall wheelhouse/py_cel-*.whl
   ```
 
 - Verify that the wheel is working correctly
