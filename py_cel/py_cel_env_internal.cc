@@ -35,7 +35,7 @@
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "runtime/standard_runtime_builder_factory.h"
-#include "py_cel/py_cel_extension.h"
+#include "py_cel/cel_extension.h"
 #include "py_cel/py_cel_python_extension.h"
 #include "py_cel/py_cel_type.h"
 #include "py_cel/py_descriptor_database.h"
@@ -58,7 +58,7 @@ PyCelEnvInternal::PyCelEnvInternal(
       variable_types_(std::move(variableTypes)),
       container_(std::move(container)) {
   for (PyObject* ext : extensions) {
-    extensions_.push_back(std::make_unique<PyCelExtensionHandle>(ext));
+    extensions_.push_back(std::make_unique<CelExtensionHandle>(ext));
   }
 }
 
@@ -76,9 +76,9 @@ absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
   compiler_builder->GetCheckerBuilder().set_container(env->container_);
   PY_CEL_RETURN_IF_ERROR(
       compiler_builder->AddLibrary(cel::StandardCompilerLibrary()));
-  for (std::unique_ptr<PyCelExtensionHandle>& extension_handle :
+  for (std::unique_ptr<CelExtensionHandle>& extension_handle :
        env->extensions_) {
-    PY_CEL_ASSIGN_OR_RETURN(PyCelExtension * extension,
+    PY_CEL_ASSIGN_OR_RETURN(CelExtension * extension,
                             extension_handle->GetExtension(env));
     PY_CEL_RETURN_IF_ERROR(
         extension->ConfigureCompiler(*compiler_builder, env->descriptor_pool_));
@@ -121,9 +121,9 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
       cel::CreateStandardRuntimeBuilder(&env->descriptor_pool_, opts));
   PY_CEL_RETURN_IF_ERROR(cel::EnableReferenceResolver(
       builder, cel::ReferenceResolverEnabled::kAlways));
-  for (std::unique_ptr<PyCelExtensionHandle>& extension_handle :
+  for (std::unique_ptr<CelExtensionHandle>& extension_handle :
        env->extensions_) {
-    PY_CEL_ASSIGN_OR_RETURN(PyCelExtension * extension,
+    PY_CEL_ASSIGN_OR_RETURN(CelExtension * extension,
                             extension_handle->GetExtension(env));
     PY_CEL_RETURN_IF_ERROR(extension->ConfigureRuntime(builder, opts));
   }
@@ -144,19 +144,19 @@ const PyCelType& PyCelEnvInternal::GetVariableType(
   return PyCelType::Dyn();
 }
 
-PyCelExtensionHandle::PyCelExtensionHandle(PyObject* extension)
+CelExtensionHandle::CelExtensionHandle(PyObject* extension)
     : py_extension_(extension), cel_extension_(nullptr) {
   ABSL_CHECK(PyGILState_Check());
   Py_INCREF(py_extension_);
 }
 
-PyCelExtensionHandle::~PyCelExtensionHandle() {
+CelExtensionHandle::~CelExtensionHandle() {
   auto gil_state = PyGILState_Ensure();
   Py_DECREF(py_extension_);
   PyGILState_Release(gil_state);
 }
 
-absl::StatusOr<PyCelExtension*> PyCelExtensionHandle::GetExtension(
+absl::StatusOr<CelExtension*> CelExtensionHandle::GetExtension(
     const std::shared_ptr<PyCelEnvInternal>& env) {
   if (cel_extension_) {
     return cel_extension_;
@@ -166,7 +166,7 @@ absl::StatusOr<PyCelExtension*> PyCelExtensionHandle::GetExtension(
     return absl::InvalidArgumentError("Provided extension is None");
   }
 
-  // First, check if the object is a PyCelExtension (extension implemented in
+  // First, check if the object is a CelExtension (extension implemented in
   // Python)
   absl::Status status_py_cel_extension;
   try {
@@ -177,11 +177,11 @@ absl::StatusOr<PyCelExtension*> PyCelExtensionHandle::GetExtension(
   }
 
   // If that fails, check if the object is a pybind11 wrapper for
-  // PyCelExtension.
+  // CelExtension.
   absl::Status status_cc_cel_extension;
   try {
     pybind11::handle handle = pybind11::handle(py_extension_);
-    return handle.cast<PyCelExtension*>();
+    return handle.cast<CelExtension*>();
   } catch (const pybind11::cast_error& e) {
     status_cc_cel_extension = absl::InvalidArgumentError(e.what());
   }

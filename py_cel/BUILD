@@ -45,7 +45,7 @@ pybind_extension(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        ":py_cel_extension",
+        ":cel_extension",
         ":status_macros",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/base:no_destructor",
@@ -95,8 +95,8 @@ pybind_extension(
 
 # For pybind11-based CEL extensions.
 pybind_library(
-    name = "py_cel_extension",
-    hdrs = ["py_cel_extension.h"],
+    name = "cel_extension",
+    hdrs = ["cel_extension.h"],
     visibility = ["//visibility:public"],
     deps = [
         "@com_google_absl//absl/status",

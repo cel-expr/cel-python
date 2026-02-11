@@ -37,10 +37,10 @@ namespace cel_python {
 
 // Base class used for pybind11-based extensions. It is not instantiable from
 // Python.
-class PyCelExtension {
+class CelExtension {
  public:
-  explicit PyCelExtension(std::string name) : name_(std::move(name)) {};
-  virtual ~PyCelExtension() = default;
+  explicit CelExtension(std::string name) : name_(std::move(name)) {};
+  virtual ~CelExtension() = default;
 
   virtual absl::Status ConfigureCompiler(
       cel::CompilerBuilder& compiler_builder,
@@ -59,7 +59,7 @@ class PyCelExtension {
   std::string name_;
 };
 
-#define PY_CEL_MODULE_NAME "py_cel"
+#define CEL_MODULE_NAME "py_cel"
 
 // Macro for defining a pybind11 module for a CEL extension. The macro takes two
 // arguments: the name of the module and the name of the extension class. It
@@ -70,7 +70,7 @@ class PyCelExtension {
 //
 // Example:
 //
-//   class SampleCelExtension : public cel_python::PyCelExtension {
+//   class SampleCelExtension : public cel_python::CelExtension {
 //     ...
 //   };
 //
@@ -78,8 +78,8 @@ class PyCelExtension {
 //
 #define CEL_EXTENSION_MODULE(module_name, class_name)                        \
   PYBIND11_MODULE(module_name, m) {                                          \
-    pybind11::module_::import(PY_CEL_MODULE_NAME);                           \
-    pybind11::class_<class_name, cel_python::PyCelExtension>(m, #class_name) \
+    pybind11::module_::import(CEL_MODULE_NAME);                           \
+    pybind11::class_<class_name, cel_python::CelExtension>(m, #class_name) \
         .def(pybind11::init<>());                                            \
   }
 

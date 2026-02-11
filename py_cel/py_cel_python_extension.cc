@@ -30,7 +30,7 @@
 #include "compiler/compiler.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "py_cel/py_cel_extension.h"
+#include "py_cel/cel_extension.h"
 #include "py_cel/py_cel_function.h"
 #include "py_cel/py_cel_function_decl.h"
 #include "py_cel/py_cel_overload.h"
@@ -49,17 +49,17 @@ static const cel::FunctionDescriptorOptions kFunctionDescriptorOptions = {
     .is_strict = true, .is_contextual = true};
 
 void PyCelPythonExtension::DefinePythonBindings(py::module_& m) {
-  py::class_<PyCelExtension>(m, "CelExtensionBase")
+  py::class_<CelExtension>(m, "CelExtensionBase")
       .def(py::init<std::string>(), py::arg("name"));
 
-  py::class_<PyCelPythonExtension, PyCelExtension>(m, "CelExtension")
+  py::class_<PyCelPythonExtension, CelExtension>(m, "CelExtension")
       .def(py::init<std::string, std::vector<PyCelFunctionDecl>>(),
            py::arg("name"), py::arg("functions"));
 }
 
 PyCelPythonExtension::PyCelPythonExtension(
     std::string name, std::vector<PyCelFunctionDecl> functions)
-    : PyCelExtension(std::move(name)), functions_(std::move(functions)) {}
+    : CelExtension(std::move(name)), functions_(std::move(functions)) {}
 
 absl::Status PyCelPythonExtension::ConfigureCompiler(
     cel::CompilerBuilder& compiler_builder,

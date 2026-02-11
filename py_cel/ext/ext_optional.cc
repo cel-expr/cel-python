@@ -18,14 +18,14 @@
 #include "runtime/optional_types.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "py_cel/py_cel_extension.h"
+#include "py_cel/cel_extension.h"
 #include "google/protobuf/descriptor.h"
 
 namespace cel_python {
 
-class ExtOptional : public PyCelExtension {
+class ExtOptional : public CelExtension {
  public:
-  explicit ExtOptional() : PyCelExtension("cel.lib.optional") {}
+  explicit ExtOptional() : CelExtension("cel.lib.optional") {}
 
   absl::Status ConfigureCompiler(
       cel::CompilerBuilder& compiler_builder,

@@ -233,7 +233,7 @@ expr = cel_env.compile("my_func(1)")
 #### Defining a custom extension in C++
 
 To define a custom extension in C++, define a class extending
-`cel_python::PyCelExtension`. There are two methods you will need to implement:
+`cel_python::CelExtension`. There are two methods you will need to implement:
 `ConfigureCompiler` and `ConfigureRuntime`. The implementations of these methods
 use the same API as extensions written for the C++ CEL runtime. In fact,
 extensions written for the C++ runtime can be used unchanged with PyCEL - you
@@ -297,7 +297,7 @@ absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
 }
 ```
 
-Once you have the custom subclass of `cel_python::PyCelExtension`, add this line
+Once you have the custom subclass of `cel_python::CelExtension`, add this line
 to turn this class into a Python module:
 
 ```cpp

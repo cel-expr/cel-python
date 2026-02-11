@@ -22,14 +22,14 @@
 #include "compiler/compiler.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "py_cel/py_cel_extension.h"
+#include "py_cel/cel_extension.h"
 #include "py_cel/py_cel_function_decl.h"
 #include "google/protobuf/descriptor.h"
 #include <pybind11/pybind11.h>
 
 namespace cel_python {
 
-class PyCelPythonExtension : public PyCelExtension {
+class PyCelPythonExtension : public CelExtension {
  public:
   static void DefinePythonBindings(pybind11::module& m);
   PyCelPythonExtension(std::string name,

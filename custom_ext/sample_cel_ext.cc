@@ -23,7 +23,7 @@
 #include "runtime/function_adapter.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "py_cel/py_cel_extension.h"
+#include "py_cel/cel_extension.h"
 #include "py_cel/status_macros.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/descriptor.h"
@@ -63,10 +63,10 @@ static absl::StatusOr<StringValue> Translate(
 
 }  // namespace
 
-class SampleCelExtension : public cel_python::PyCelExtension {
+class SampleCelExtension : public cel_python::CelExtension {
  public:
   explicit SampleCelExtension()
-      : cel_python::PyCelExtension("sample.cel.cpp.ext") {}
+      : cel_python::CelExtension("sample.cel.cpp.ext") {}
 
   absl::Status ConfigureCompiler(
       cel::CompilerBuilder& compiler_builder,

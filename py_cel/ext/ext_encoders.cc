@@ -18,14 +18,14 @@
 #include "extensions/encoders.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "py_cel/py_cel_extension.h"
+#include "py_cel/cel_extension.h"
 #include "google/protobuf/descriptor.h"
 
 namespace cel_python {
 
-class ExtEncoders : public PyCelExtension {
+class ExtEncoders : public CelExtension {
  public:
-  explicit ExtEncoders() : PyCelExtension("cel.lib.ext.encoders") {}
+  explicit ExtEncoders() : CelExtension("cel.lib.ext.encoders") {}
 
   absl::Status ConfigureCompiler(
       cel::CompilerBuilder& compiler_builder,

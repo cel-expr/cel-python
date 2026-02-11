@@ -12,7 +12,7 @@ pybind_extension(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//py_cel:py_cel_extension",
+        "//py_cel:cel_extension",
         "@com_google_absl//absl/status",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//extensions:bindings_ext",
@@ -30,7 +30,7 @@ pybind_extension(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//py_cel:py_cel_extension",
+        "//py_cel:cel_extension",
         "@com_google_absl//absl/status",
         "@com_google_cel_cpp//checker:type_checker_builder",
         "@com_google_cel_cpp//compiler",
@@ -51,7 +51,7 @@ pybind_extension(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//py_cel:py_cel_extension",
+        "//py_cel:cel_extension",
         "//py_cel:status_macros",
         "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/status",
@@ -84,7 +84,7 @@ pybind_extension(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//py_cel:py_cel_extension",
+        "//py_cel:cel_extension",
         "@com_google_absl//absl/status",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//compiler:optional",
@@ -105,7 +105,7 @@ pybind_extension(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//py_cel:py_cel_extension",
+        "//py_cel:cel_extension",
         "@com_google_absl//absl/status",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//extensions:proto_ext",
@@ -123,7 +123,7 @@ pybind_extension(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        "//py_cel:py_cel_extension",
+        "//py_cel:cel_extension",
         "@com_google_absl//absl/status",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//extensions:strings",

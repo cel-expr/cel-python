@@ -29,7 +29,7 @@
 #include "runtime/runtime.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "py_cel/py_cel_extension.h"
+#include "py_cel/cel_extension.h"
 #include "py_cel/py_cel_type.h"
 #include "py_cel/py_descriptor_database.h"
 #include "py_cel/py_message_factory.h"
@@ -41,12 +41,12 @@ namespace cel_python {
 
 class PyCelEnvInternal;
 
-class PyCelExtensionHandle {
+class CelExtensionHandle {
  public:
-  explicit PyCelExtensionHandle(PyObject* extension);
-  ~PyCelExtensionHandle();
+  explicit CelExtensionHandle(PyObject* extension);
+  ~CelExtensionHandle();
 
-  absl::StatusOr<PyCelExtension*> GetExtension(
+  absl::StatusOr<CelExtension*> GetExtension(
       const std::shared_ptr<PyCelEnvInternal>& env);
 
  private:
@@ -56,7 +56,7 @@ class PyCelExtensionHandle {
 
   // Non-retaining pointer to the CelExtension encapsulated by `py_extension_`.
   // It must be deleted before `py_extension_`.
-  PyCelExtension* cel_extension_;
+  CelExtension* cel_extension_;
 };
 
 // PyCelEnvInternal is a container for internal CEL components not exposed to
@@ -104,7 +104,7 @@ class PyCelEnvInternal {
   std::shared_ptr<PyMessageFactory> py_message_factory_;
   // Synchronized by the GIL.
   std::unordered_map<std::string, PyCelType> variable_types_;
-  std::vector<std::unique_ptr<PyCelExtensionHandle>> extensions_;
+  std::vector<std::unique_ptr<CelExtensionHandle>> extensions_;
   std::string container_;
   std::unique_ptr<cel::Compiler> compiler_;
   absl::flat_hash_map<RuntimeMode, std::unique_ptr<const cel::Runtime>>

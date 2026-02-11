@@ -15,14 +15,14 @@
 #include "absl/status/status.h"
 #include "compiler/compiler.h"
 #include "extensions/proto_ext.h"
-#include "py_cel/py_cel_extension.h"
+#include "py_cel/cel_extension.h"
 #include "google/protobuf/descriptor.h"
 
 namespace cel_python {
 
-class ExtProto : public PyCelExtension {
+class ExtProto : public CelExtension {
  public:
-  explicit ExtProto() : PyCelExtension("cel.lib.ext.proto") {}
+  explicit ExtProto() : CelExtension("cel.lib.ext.proto") {}
 
   absl::Status ConfigureCompiler(
       cel::CompilerBuilder& compiler_builder,
