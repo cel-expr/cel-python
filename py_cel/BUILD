@@ -43,7 +43,10 @@ pybind_extension(
         "py_message_factory.cc",
         "py_message_factory.h",
     ],
-    visibility = ["//visibility:public"],
+    visibility = [
+        "//communication/rtctools/pcm/core:__pkg__",
+        "//visibility:public",
+    ],
     deps = [
         ":cel_extension",
         ":status_macros",
