@@ -252,7 +252,7 @@ This method adds extension function definitions to the provided
 absl::Status ConfigureCompiler(
       cel::CompilerBuilder& compiler_builder,
       const proto2::DescriptorPool& descriptor_pool) {
-    PY_CEL_ASSIGN_OR_RETURN(
+    CEL_PYTHON_ASSIGN_OR_RETURN(
         auto func_translate,
         cel::MakeFunctionDecl("translate",
             cel::MakeMemberOverloadDecl("translate_inst",
@@ -260,7 +260,7 @@ absl::Status ConfigureCompiler(
                                 /*target=*/cel::StringType(),
                                 /*from_lang=*/cel::StringType(),
                                 /*to_lang=*/cel::StringType())));
-    PY_CEL_RETURN_IF_ERROR(
+    CEL_PYTHON_RETURN_IF_ERROR(
         compiler_builder.GetCheckerBuilder().AddFunction(func_translate));
     return absl::OkStatus();
 }
@@ -292,7 +292,7 @@ absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
                                       const StringValue&>;
     auto status = TranslateFunctionAdapter::RegisterMemberOverload(
         "translate", &Translate, runtime_builder.function_registry());
-    PY_CEL_RETURN_IF_ERROR(status);
+    CEL_PYTHON_RETURN_IF_ERROR(status);
     return absl::OkStatus();
 }
 ```
@@ -368,7 +368,7 @@ If the extension is written in C++, use the `RegisterLazyFunction` function:
     using MyFunctionAdapter =
         cel::UnaryFunctionAdapter<absl::StatusOr<cel::IntValue>,
                                     const cel::IntValue&>;
-    PY_CEL_RETURN_IF_ERROR(
+    CEL_PYTHON_RETURN_IF_ERROR(
         runtime_builder.function_registry().RegisterLazyFunction(
             MyFunctionAdapter::CreateDescriptor(
                 "my_func",

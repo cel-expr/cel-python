@@ -71,7 +71,7 @@ class SampleCelExtension : public cel_python::CelExtension {
   absl::Status ConfigureCompiler(
       cel::CompilerBuilder& compiler_builder,
       const google::protobuf::DescriptorPool& descriptor_pool) override {
-    PY_CEL_ASSIGN_OR_RETURN(
+    CEL_PYTHON_ASSIGN_OR_RETURN(
         auto func_translate,
         MakeFunctionDecl("translate",
                          MakeMemberOverloadDecl("translate_inst",
@@ -79,16 +79,16 @@ class SampleCelExtension : public cel_python::CelExtension {
                                                 /*target=*/StringType(),
                                                 /*from_lang=*/StringType(),
                                                 /*to_lang=*/StringType())));
-    PY_CEL_RETURN_IF_ERROR(
+    CEL_PYTHON_RETURN_IF_ERROR(
         compiler_builder.GetCheckerBuilder().AddFunction(func_translate));
 
-    PY_CEL_ASSIGN_OR_RETURN(
+    CEL_PYTHON_ASSIGN_OR_RETURN(
         auto func_translate_late,
         MakeFunctionDecl("translate_late",
                          MakeOverloadDecl("late_bound_translation",
                                           /*return_type=*/StringType(),
                                           /*text=*/StringType())));
-    PY_CEL_RETURN_IF_ERROR(
+    CEL_PYTHON_RETURN_IF_ERROR(
         compiler_builder.GetCheckerBuilder().AddFunction(func_translate_late));
     return absl::OkStatus();
   }
@@ -101,13 +101,13 @@ class SampleCelExtension : public cel_python::CelExtension {
                                       const StringValue&>;
     auto status = TranslateFunctionAdapter::RegisterMemberOverload(
         "translate", &Translate, runtime_builder.function_registry());
-    PY_CEL_RETURN_IF_ERROR(status);
+    CEL_PYTHON_RETURN_IF_ERROR(status);
 
     // Register a lazy function that will be bound at evaluation time.
     using TranslateLateFunctionAdapter =
         ::cel::UnaryFunctionAdapter<absl::StatusOr<StringValue>,
                                     const StringValue&>;
-    PY_CEL_RETURN_IF_ERROR(
+    CEL_PYTHON_RETURN_IF_ERROR(
         runtime_builder.function_registry().RegisterLazyFunction(
             TranslateLateFunctionAdapter::CreateDescriptor(
                 "translate_late",

@@ -86,8 +86,8 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
   ABSL_CHECK(PyGILState_Check());
 
   std::shared_ptr<PyCelEnvInternal> env = GetEnvFromContext(context);
-  PY_CEL_ASSIGN_OR_RETURN(auto py_arena,
-                          PyCelArena::FromProtoArena(context.arena()));
+  CEL_PYTHON_ASSIGN_OR_RETURN(auto py_arena,
+                              PyCelArena::FromProtoArena(context.arena()));
   PyObject* py_args = PyTuple_New(args.size());
   for (int i = 0; i < args.size(); ++i) {
     PyTuple_SetItem(py_args, i,

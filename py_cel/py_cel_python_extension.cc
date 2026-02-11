@@ -71,7 +71,7 @@ absl::Status PyCelPythonExtension::ConfigureCompiler(
     for (const PyCelOverload& overload : function.overloads()) {
       cel::OverloadDecl overload_decl;
       overload_decl.set_id(overload.overload_id());
-      PY_CEL_ASSIGN_OR_RETURN(
+      CEL_PYTHON_ASSIGN_OR_RETURN(
           cel::Type cel_type,
           PyCelType::ToCelType(overload.return_type(), arena, descriptor_pool));
       overload_decl.set_result(cel_type);
@@ -79,15 +79,15 @@ absl::Status PyCelPythonExtension::ConfigureCompiler(
       auto& mutable_args = overload_decl.mutable_args();
       mutable_args.reserve(overload.parameters().size());
       for (const auto& arg : overload.parameters()) {
-        PY_CEL_ASSIGN_OR_RETURN(
+        CEL_PYTHON_ASSIGN_OR_RETURN(
             cel::Type cel_type,
             PyCelType::ToCelType(arg, arena, descriptor_pool));
         mutable_args.push_back(cel_type);
       }
-      PY_CEL_RETURN_IF_ERROR(
+      CEL_PYTHON_RETURN_IF_ERROR(
           function_decl.AddOverload(std::move(overload_decl)));
     }
-    PY_CEL_RETURN_IF_ERROR(
+    CEL_PYTHON_RETURN_IF_ERROR(
         compiler_builder.GetCheckerBuilder().MergeFunction(function_decl));
   }
 
@@ -113,12 +113,12 @@ absl::Status PyCelPythonExtension::ConfigureRuntime(
       cel::FunctionDescriptor descriptor(function.name(), overload.is_member(),
                                          types, kFunctionDescriptorOptions);
       if (!overload.py_function().is_none()) {
-        PY_CEL_RETURN_IF_ERROR(runtime_builder.function_registry().Register(
+        CEL_PYTHON_RETURN_IF_ERROR(runtime_builder.function_registry().Register(
             descriptor, std::make_unique<PyCelFunctionAdapter>(
                             function.name(), overload.return_type(),
                             overload.py_function())));
       } else {
-        PY_CEL_RETURN_IF_ERROR(
+        CEL_PYTHON_RETURN_IF_ERROR(
             runtime_builder.function_registry().RegisterLazyFunction(
                 descriptor));
       }

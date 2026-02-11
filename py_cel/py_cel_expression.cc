@@ -107,25 +107,25 @@ absl::StatusOr<PyCelExpression> PyCelExpression::Compile(
     bool disable_check) {
   ABSL_CHECK(PyGILState_Check());
 
-  PY_CEL_ASSIGN_OR_RETURN(const cel::Compiler* compiler,
-                          PyCelEnvInternal::GetCompiler(env));
+  CEL_PYTHON_ASSIGN_OR_RETURN(const cel::Compiler* compiler,
+                              PyCelEnvInternal::GetCompiler(env));
 
   if (disable_check) {
-    PY_CEL_ASSIGN_OR_RETURN(auto s, cel::NewSource(cel_expr, "<input>"));
-    CEL_PYTHON_ASSIGN_OR_RETURN(auto ast, compiler->GetParser().Parse(*s));
+    CEL_PYTHON_ASSIGN_OR_RETURN(auto s, cel::NewSource(cel_expr, "<input>"));
+    PY_CEL_PYTHON_ASSIGN_OR_RETURN(auto ast, compiler->GetParser().Parse(*s));
     ParsedExpr parsed_expr;
-    PY_CEL_RETURN_IF_ERROR(cel::AstToParsedExpr(*ast, &parsed_expr));
+    CEL_PYTHON_RETURN_IF_ERROR(cel::AstToParsedExpr(*ast, &parsed_expr));
     return PyCelExpression(parsed_expr, env);
   }
 
-  CEL_PYTHON_ASSIGN_OR_RETURN(auto validation, compiler->Compile(cel_expr));
+  PY_CEL_PYTHON_ASSIGN_OR_RETURN(auto validation, compiler->Compile(cel_expr));
   if (!validation.IsValid() || validation.GetAst() == nullptr) {
     return absl::InvalidArgumentError(validation.FormatError());
   }
-  PY_CEL_ASSIGN_OR_RETURN(std::unique_ptr<cel::Ast> ast,
-                          validation.ReleaseAst());
+  CEL_PYTHON_ASSIGN_OR_RETURN(std::unique_ptr<cel::Ast> ast,
+                              validation.ReleaseAst());
   CheckedExpr checked_expr;
-  PY_CEL_RETURN_IF_ERROR(cel::AstToCheckedExpr(*ast, &checked_expr));
+  CEL_PYTHON_RETURN_IF_ERROR(cel::AstToCheckedExpr(*ast, &checked_expr));
   return PyCelExpression(checked_expr, env);
 }
 
@@ -151,18 +151,18 @@ absl::StatusOr<PyCelValue> PyCelExpression::Eval(
   ABSL_CHECK(PyGILState_Check());
   if (cel_program_ == nullptr) {
     if (std::holds_alternative<ParsedExpr>(expr_)) {
-      CEL_PYTHON_ASSIGN_OR_RETURN(
+      PY_CEL_PYTHON_ASSIGN_OR_RETURN(
           const cel::Runtime* runtime,
           PyCelEnvInternal::GetRuntime(
               env_, PyCelEnvInternal::kStandardIgnoreWarnings));
-      CEL_PYTHON_ASSIGN_OR_RETURN(
+      PY_CEL_PYTHON_ASSIGN_OR_RETURN(
           cel_program_, cel::extensions::ProtobufRuntimeAdapter::CreateProgram(
                             *runtime, std::get<ParsedExpr>(expr_)));
     } else {
-      CEL_PYTHON_ASSIGN_OR_RETURN(
+      PY_CEL_PYTHON_ASSIGN_OR_RETURN(
           const cel::Runtime* runtime,
           PyCelEnvInternal::GetRuntime(env_, PyCelEnvInternal::kStandard));
-      CEL_PYTHON_ASSIGN_OR_RETURN(
+      PY_CEL_PYTHON_ASSIGN_OR_RETURN(
           cel_program_, cel::extensions::ProtobufRuntimeAdapter::CreateProgram(
                             *runtime, std::get<CheckedExpr>(expr_)));
     }
@@ -173,7 +173,7 @@ absl::StatusOr<PyCelValue> PyCelExpression::Eval(
   cel::EvaluateOptions options;
   options.message_factory = env->GetMessageFactory();
   options.embedder_context = &embedder_context;
-  CEL_PYTHON_ASSIGN_OR_RETURN(
+  PY_CEL_PYTHON_ASSIGN_OR_RETURN(
       cel::Value result,
       cel_program_->Evaluate(arena->GetArena(), *activation.GetActivation(),
                              std::move(options)));

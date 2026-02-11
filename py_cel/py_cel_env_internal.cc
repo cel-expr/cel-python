@@ -70,31 +70,31 @@ absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
 
   cel::CompilerOptions compiler_options;
   compiler_options.parser_options.enable_quoted_identifiers = true;
-  PY_CEL_ASSIGN_OR_RETURN(
+  CEL_PYTHON_ASSIGN_OR_RETURN(
       std::unique_ptr<cel::CompilerBuilder> compiler_builder,
       cel::NewCompilerBuilder(&env->descriptor_pool_, compiler_options));
   compiler_builder->GetCheckerBuilder().set_container(env->container_);
-  PY_CEL_RETURN_IF_ERROR(
+  CEL_PYTHON_RETURN_IF_ERROR(
       compiler_builder->AddLibrary(cel::StandardCompilerLibrary()));
   for (std::unique_ptr<CelExtensionHandle>& extension_handle :
        env->extensions_) {
-    PY_CEL_ASSIGN_OR_RETURN(CelExtension * extension,
-                            extension_handle->GetExtension(env));
-    PY_CEL_RETURN_IF_ERROR(
+    CEL_PYTHON_ASSIGN_OR_RETURN(CelExtension * extension,
+                                extension_handle->GetExtension(env));
+    CEL_PYTHON_RETURN_IF_ERROR(
         extension->ConfigureCompiler(*compiler_builder, env->descriptor_pool_));
   }
   google::protobuf::Arena* arena = compiler_builder->GetCheckerBuilder().arena();
   for (const auto& [name, type] : env->variable_types_) {
-    PY_CEL_ASSIGN_OR_RETURN(
+    CEL_PYTHON_ASSIGN_OR_RETURN(
         cel::Type cel_type,
         PyCelType::ToCelType(type, arena, env->descriptor_pool_));
     cel::VariableDecl var;
     var.set_name(name);
     var.set_type(cel_type);
-    PY_CEL_RETURN_IF_ERROR(
+    CEL_PYTHON_RETURN_IF_ERROR(
         compiler_builder->GetCheckerBuilder().AddVariable(var));
   }
-  PY_CEL_ASSIGN_OR_RETURN(env->compiler_, compiler_builder->Build());
+  CEL_PYTHON_ASSIGN_OR_RETURN(env->compiler_, compiler_builder->Build());
   return env->compiler_.get();
 }
 
@@ -116,19 +116,19 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
       opts.fail_on_warnings = false;
       break;
   }
-  PY_CEL_ASSIGN_OR_RETURN(
+  CEL_PYTHON_ASSIGN_OR_RETURN(
       cel::RuntimeBuilder builder,
       cel::CreateStandardRuntimeBuilder(&env->descriptor_pool_, opts));
-  PY_CEL_RETURN_IF_ERROR(cel::EnableReferenceResolver(
+  CEL_PYTHON_RETURN_IF_ERROR(cel::EnableReferenceResolver(
       builder, cel::ReferenceResolverEnabled::kAlways));
   for (std::unique_ptr<CelExtensionHandle>& extension_handle :
        env->extensions_) {
-    PY_CEL_ASSIGN_OR_RETURN(CelExtension * extension,
-                            extension_handle->GetExtension(env));
-    PY_CEL_RETURN_IF_ERROR(extension->ConfigureRuntime(builder, opts));
+    CEL_PYTHON_ASSIGN_OR_RETURN(CelExtension * extension,
+                                extension_handle->GetExtension(env));
+    CEL_PYTHON_RETURN_IF_ERROR(extension->ConfigureRuntime(builder, opts));
   }
-  PY_CEL_ASSIGN_OR_RETURN(std::unique_ptr<cel::Runtime> runtime,
-                          std::move(builder).Build());
+  CEL_PYTHON_ASSIGN_OR_RETURN(std::unique_ptr<cel::Runtime> runtime,
+                              std::move(builder).Build());
   const cel::Runtime* runtime_ptr = runtime.get();
   env->runtimes_[runtime_mode] = std::move(runtime);
   return runtime_ptr;

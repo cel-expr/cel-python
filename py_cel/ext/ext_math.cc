@@ -36,7 +36,7 @@ class ExtMath : public CelExtension {
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
                                 const cel::RuntimeOptions& opts) override {
-    PY_CEL_RETURN_IF_ERROR(cel::extensions::RegisterMathExtensionFunctions(
+    CEL_PYTHON_RETURN_IF_ERROR(cel::extensions::RegisterMathExtensionFunctions(
         runtime_builder.function_registry(), opts));
     return absl::OkStatus();
   }

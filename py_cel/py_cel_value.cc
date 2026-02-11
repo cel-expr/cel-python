@@ -452,8 +452,8 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
 
   switch (expected_type.GetKind()) {
     case cel::Kind::kDyn: {
-      PY_CEL_ASSIGN_OR_RETURN(const PyCelType& type,
-                              PyCelType::ForPyObject(py_object, context));
+      CEL_PYTHON_ASSIGN_OR_RETURN(const PyCelType& type,
+                                  PyCelType::ForPyObject(py_object, context));
       return PyObjectToCelValue(py_object, type, context, env, arena,
                                 /*bypass_type_check=*/true);
     }
@@ -649,8 +649,8 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
       }
     }
     case cel::Kind::kMessage: {
-      PY_CEL_ASSIGN_OR_RETURN(const PyCelType& type,
-                              PyCelType::ForPyObject(py_object, context));
+      CEL_PYTHON_ASSIGN_OR_RETURN(const PyCelType& type,
+                                  PyCelType::ForPyObject(py_object, context));
       if (!bypass_type_check && type.GetName() != expected_type.GetName()) {
         return InvalidTypeError(py_object, context, expected_type);
       }
@@ -718,15 +718,15 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           PyObject* item = PyList_GetItem(py_object, i);
           // Note: PyList_GetItem returns a borrowed reference, so we shouldn't
           // DECREF it.
-          PY_CEL_ASSIGN_OR_RETURN(cel::Value converted_value,
-                                  PyObjectToCelValue(
-                                      item, element_type,
-                                      [context, i]() {
-                                        return absl::StrFormat("%s[%d]",
-                                                               context(), i);
-                                      },
-                                      env, arena));
-          PY_CEL_RETURN_IF_ERROR(builder->Add(converted_value));
+          CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_value,
+                                      PyObjectToCelValue(
+                                          item, element_type,
+                                          [context, i]() {
+                                            return absl::StrFormat(
+                                                "%s[%d]", context(), i);
+                                          },
+                                          env, arena));
+          CEL_PYTHON_RETURN_IF_ERROR(builder->Add(converted_value));
         }
         return std::move(*builder).Build();
       }
@@ -742,7 +742,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         while (PyDict_Next(py_object, &pos, &key, &value)) {
           // Note: PyDict_Next returns borrowed references, so we shouldn't
           // DECREF them.
-          PY_CEL_ASSIGN_OR_RETURN(
+          CEL_PYTHON_ASSIGN_OR_RETURN(
               cel::Value converted_key,
               PyObjectToCelValue(
                   key, key_type,
@@ -753,7 +753,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
                   },
                   env, arena));
 
-          PY_CEL_ASSIGN_OR_RETURN(
+          CEL_PYTHON_ASSIGN_OR_RETURN(
               cel::Value converted_value,
               PyObjectToCelValue(
                   value, value_type,
@@ -764,7 +764,8 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
                         PyUnicode_AsUTF8(PyObject_Repr(value)));
                   },
                   env, arena));
-          PY_CEL_RETURN_IF_ERROR(builder->Put(converted_key, converted_value));
+          CEL_PYTHON_RETURN_IF_ERROR(
+              builder->Put(converted_key, converted_value));
         }
         return std::move(*builder).Build();
       }

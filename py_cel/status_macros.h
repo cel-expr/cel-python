@@ -20,27 +20,28 @@
 #include "absl/base/optimization.h"
 #include "absl/status/status.h"
 
-#define PY_CEL_RETURN_IF_ERROR(expr)         \
-  {                                          \
-    absl::Status __PY_CEL_STATUS__ = (expr); \
-    if (!__PY_CEL_STATUS__.ok()) {           \
-      return __PY_CEL_STATUS__;              \
-    }                                        \
+#define CEL_PYTHON_RETURN_IF_ERROR(expr)  \
+  {                                       \
+    absl::Status __CEL_STATUS__ = (expr); \
+    if (!__CEL_STATUS__.ok()) {           \
+      return __CEL_STATUS__;              \
+    }                                     \
   }
 
-#define PY_CEL_ASSIGN_OR_RETURN_(statusor, lhs, expr) \
-  auto statusor = (expr);                             \
-  if (ABSL_PREDICT_FALSE(!statusor.ok())) {           \
-    return statusor.status();                         \
-  }                                                   \
+#define CEL_PYTHON_ASSIGN_OR_RETURN_(statusor, lhs, expr) \
+  auto statusor = (expr);                                 \
+  if (ABSL_PREDICT_FALSE(!statusor.ok())) {               \
+    return statusor.status();                             \
+  }                                                       \
   lhs = std::move(statusor).value()
 
-#define PY_CEL_ASSIGN_OR_RETURN_CONCAT_HELPER_(x, y) x##y
-#define PY_CEL_ASSIGN_OR_RETURN_CONCAT_(x, y) \
-  PY_CEL_ASSIGN_OR_RETURN_CONCAT_HELPER_(x, y)
+#define CEL_PYTHON_ASSIGN_OR_RETURN_CONCAT_HELPER_(x, y) x##y
+#define CEL_PYTHON_ASSIGN_OR_RETURN_CONCAT_(x, y) \
+  CEL_PYTHON_ASSIGN_OR_RETURN_CONCAT_HELPER_(x, y)
 
-#define PY_CEL_ASSIGN_OR_RETURN(lval, expr) \
-  PY_CEL_ASSIGN_OR_RETURN_(                 \
-      PY_CEL_ASSIGN_OR_RETURN_CONCAT_(status_or_value, __LINE__), lval, expr)
+#define CEL_PYTHON_ASSIGN_OR_RETURN(lval, expr)                             \
+  CEL_PYTHON_ASSIGN_OR_RETURN_(                                             \
+      CEL_PYTHON_ASSIGN_OR_RETURN_CONCAT_(status_or_value, __LINE__), lval, \
+      expr)
 
 #endif  // THIRD_PARTY_CEL_PYTHON_STATUS_MACROS_H_

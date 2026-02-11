@@ -25,10 +25,10 @@
 #include "py_cel/status_macros.h"
 #include <pybind11/pybind11.h>
 
-#define CEL_PYTHON_ASSIGN_OR_RETURN(...)    \
-  PY_CEL_RETURN_IF_ERROR(PyErr_toStatus()); \
-  PY_CEL_ASSIGN_OR_RETURN(__VA_ARGS__);     \
-  PY_CEL_RETURN_IF_ERROR(PyErr_toStatus());
+#define PY_CEL_PYTHON_ASSIGN_OR_RETURN(...)     \
+  CEL_PYTHON_RETURN_IF_ERROR(PyErr_toStatus()); \
+  CEL_PYTHON_ASSIGN_OR_RETURN(__VA_ARGS__);     \
+  CEL_PYTHON_RETURN_IF_ERROR(PyErr_toStatus());
 
 namespace cel_python {
 
