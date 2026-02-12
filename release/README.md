@@ -19,7 +19,7 @@ To build the py_cel wheel locally for testing:
   Go to the parent directory of the one containing this file, e.g.
 
   ```
-  cd py-cel-git-repo
+  cd cel-git-repo
   ```
 
 - Update release version

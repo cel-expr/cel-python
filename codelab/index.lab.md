@@ -1,4 +1,4 @@
-# cel.expr.python (CEL for Python) Codelab: Fast, safe, embedded expressions
+# cel-expr-python (CEL for Python) Codelab: Fast, safe, embedded expressions
 
 <details>
 <summary>
@@ -24,7 +24,7 @@ lambda expressions. While CEL is commonly used for boolean decisions,
 it can also be used to construct more complex objects like JSON or
 protobuf messages.
 
-### cel.expr.python - CEL runtime for Python
+### cel-expr-python - CEL runtime for Python
 Cel.expr.python is a collection of Python APIs for compilation, validation and
 evaluation of CEL expressions. It also includes support for CEL extensions,
 written either in Python or C++.
@@ -143,7 +143,7 @@ function bindings being used across the lifetime of a process (a common case).
 
 </summary>
 
-Before we can start using cel.expr.python, let's install it in the Python environment:
+Before we can start using cel-expr-python, let's install it in the Python environment:
 ```
 pip install cel-expr-python
 ```

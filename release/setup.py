@@ -107,15 +107,36 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
 
 
 setuptools.setup(
-    name='py-cel',
+    name='cel-expr-python',
     ext_modules=[
-        BazelExtension('py_cel.py_cel', '//py_cel:py_cel'),
-        BazelExtension('py_cel.ext.ext_bindings', '//py_cel/ext:ext_bindings'),
-        BazelExtension('py_cel.ext.ext_encoders', '//py_cel/ext:ext_encoders'),
-        BazelExtension('py_cel.ext.ext_math', '//py_cel/ext:ext_math'),
-        BazelExtension('py_cel.ext.ext_optional', '//py_cel/ext:ext_optional'),
-        BazelExtension('py_cel.ext.ext_proto', '//py_cel/ext:ext_proto'),
-        BazelExtension('py_cel.ext.ext_string', '//py_cel/ext:ext_string'),
+        BazelExtension(
+            'cel_expr_python.cel',
+            '//cel_expr_python:cel',
+        ),
+        BazelExtension(
+            'cel_expr_python.ext.ext_bindings',
+            '//cel_expr_python/ext:ext_bindings',
+        ),
+        BazelExtension(
+            'cel_expr_python.ext.ext_encoders',
+            '//cel_expr_python/ext:ext_encoders',
+        ),
+        BazelExtension(
+            'cel_expr_python.ext.ext_math',
+            '//cel_expr_python/ext:ext_math',
+        ),
+        BazelExtension(
+            'cel_expr_python.ext.ext_optional',
+            '//cel_expr_python/ext:ext_optional',
+        ),
+        BazelExtension(
+            'cel_expr_python.ext.ext_proto',
+            '//cel_expr_python/ext:ext_proto',
+        ),
+        BazelExtension(
+            'cel_expr_python.ext.ext_string',
+            '//cel_expr_python/ext:ext_string',
+        ),
     ],
     cmdclass={'build_ext': BazelBuild},
     zip_safe=False,
