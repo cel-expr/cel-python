@@ -13,7 +13,7 @@
 # limitations under the License.
 
 [project]
-name = "py-cel"
+name = "cel-expr-python"
 # $VERSION is replaced with the desired version in build_wheel.sh.
 version = "$VERSION"
 description = "The CEL Python runtime"
@@ -31,7 +31,7 @@ exclude = ["wheelhouse*", "conformance*", "custom_ext*"]
 [tool.cibuildwheel]
 build = "cp311-* cp312-* cp313-*"
 skip = "*musllinux*"
-test-command = "python {project}/py_cel_basic_test.py"
+test-command = "python {project}/cel_basic_test.py"
 
 [tool.cibuildwheel.linux]
 before-all = "echo 'Installing bazelisk'; curl -LO https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64 && chmod +x bazelisk-linux-amd64 && mv bazelisk-linux-amd64 /usr/local/bin/bazel"

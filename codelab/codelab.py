@@ -13,21 +13,21 @@
 # limitations under the License.
 
 # This file contains code that demonstrates common CEL features.
-# This code is intended for use with the PyCEL Codelab
+# This code is intended for use with the cel.expr.python Codelab
 
 """This file contains code that demonstrates common CEL features.
 
-This code is intended for use with the PyCEL Codelab.
+This code is intended for use with the cel.expr.python Codelab.
 """
 
 # pylint: disable=unused-import
 import datetime
 import json
 import pprint
+from cel_expr_python import cel
+from cel_expr_python.ext import ext_math
+from cel_expr_python.ext import ext_string
 from google.rpc.context import attribute_context_pb2
-from py_cel import py_cel as cel
-from py_cel.ext import ext_math
-from py_cel.ext import ext_string
 # pylint: enable=unused-import
 
 

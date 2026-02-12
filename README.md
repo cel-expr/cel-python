@@ -1,4 +1,4 @@
-# CEL Python Wrapper (PyCEL)
+# CEL Python Wrapper (cel.expr.python)
 
 This is a Python wrapper for the CEL C++ implementation.
 
@@ -7,7 +7,7 @@ This is a Python wrapper for the CEL C++ implementation.
 ### Importing CEL module
 
 ```python
-from py_cel import py_cel
+from cel_expr_python import cel
 ```
 
 ### Creating and configuring Cel
@@ -16,12 +16,12 @@ To create a CEL environment, you need to define
 variable types that can be used in expressions.
 
 ```python
-cel_env = py_cel.NewEnv(variables={"x": py_cel.Type.INT, "y": py_cel.Type.INT})
+cel_env = cel.NewEnv(variables={"x": cel.Type.INT, "y": cel.Type.INT})
 ```
 
 #### Optional configuration parameters
 
-The `py_cel.NewEnv` constructor also accepts the following optional parameters:
+The `cel.NewEnv` constructor also accepts the following optional parameters:
 
 *   `pool` (`descriptor_pool.DescriptorPool`): The descriptor pool used for
     resolving protobuf message types within CEL expressions. If not provided,
@@ -115,7 +115,7 @@ of the associated objects are released until the last object using the arena is
 garbage-collected in Python.
 
 ```python
-arena = py_cel.Arena()
+arena = cel.Arena()
 
 activation1 = cel_env.Activation({"x": 7, "y": 4}, arena)
 # evaluate some expressions
@@ -135,19 +135,19 @@ You can pass protobuf messages as variables to an activation; CEL
 expressions can return protobuf messages.
 
 First, ensure your proto messages are available in the descriptor pool used by
-`py_cel.NewEnv`, by importing your proto library in Python:
+`cel.NewEnv`, by importing your proto library in Python:
 
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_pb
 
-Then declare any variables of message type using `py_cel.Type` with their fully
+Then declare any variables of message type using `cel.Type` with their fully
 qualified name.
 
 ```python
 # Declare 'msg_var' as a message type.
-cel = py_cel.NewEnv(
+cel = cel.NewEnv(
     pool,
     variables={
-        "msg_var": py_cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+        "msg_var": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
     },
 )
 ```
@@ -192,13 +192,13 @@ Resulting message value: 123
 
 #### Standard extensions
 
-Standard extensions are available under `py_cel.ext`.
+Standard extensions are available under `cel_expr_python.ext`.
 
 ```python
-from py_cel.ext import ext_math
+from cel_expr_python.ext import ext_math
 
-cel = py_cel.NewEnv(pool, extensions=[ext_math.ExtMath()])
-expr = cel_env.compile("math.sqrt(4)")
+env = cel.NewEnv(pool, extensions=[ext_math.ExtMath()])
+expr = env.compile("math.sqrt(4)")
 ```
 
 #### Defining a custom extension in Python
@@ -209,16 +209,16 @@ You can define custom functions and pass them as an extension.
 def my_func_impl(x):
   return x + 1
 
-my_ext = py_cel.CelExtension(
+my_ext = cel.CelExtension(
     "my_extension",
     [
-        py_cel.FunctionDecl(
+        cel.FunctionDecl(
             "my_func",
             [
-                py_cel.Overload(
+                cel.Overload(
                     "my_func_int",
-                    py_cel.Type.INT,
-                    [py_cel.Type.INT],
+                    cel.Type.INT,
+                    [cel.Type.INT],
                     impl=my_func_impl,
                 )
             ],
@@ -226,7 +226,7 @@ my_ext = py_cel.CelExtension(
     ],
 )
 
-cel_env = py_cel.NewEnv(pool, extensions=[my_ext])
+cel_env = cel.NewEnv(pool, extensions=[my_ext])
 expr = cel_env.compile("my_func(1)")
 ```
 
@@ -311,23 +311,23 @@ pybind_extension(
     name = "translation_cel_ext",
     srcs = ["translation_cel_ext.cc"],
     data = [
-        "@py_cel:py_cel",
+        "@cel_expr_python:cel",
     ]
     deps = [
-        "@py_cel:py_cel",
-        "@py_cel:py_cel_extension",
-        "@py_cel:status_macros",
+        "@cel_expr_python:cel",
+        "@cel_expr_python:cel_extension",
+        "@cel_expr_python:status_macros",
         ...
     ],
 )
 ```
 
-Now you can use the extension in PyCel:
+Now you can use the extension in cel_expr_python:
 
 ```python
 import translation_cel_ext
 
-cel_env = py_cel.NewEnv(variables={},
+cel_env = cel.NewEnv(variables={},
   extensions=[translation_cel_ext.TranslationCelExtension()])
 
 expr = cel_env.compile("'Hello, world!'.translate('en', 'es')")
@@ -341,16 +341,16 @@ simply leave the implementation parameter unspecified:
 
 ```python
 
-my_ext = py_cel.CelExtension(
+my_ext = cel.CelExtension(
     "my_extension",
     [
-        py_cel.FunctionDecl(
+        cel.FunctionDecl(
             "my_func",
             [
-                py_cel.Overload(
+                cel.Overload(
                     "my_func_int",
-                    py_cel.Type.INT,
-                    [py_cel.Type.INT],
+                    cel.Type.INT,
+                    [cel.Type.INT],
                     # Note: no impl provided here.
                 )
             ],
@@ -380,7 +380,7 @@ If the extension is written in C++, use the `RegisterLazyFunction` function:
 Now you can bind the function at runtime:
 
 ```python
-cel_env = py_cel.NewEnv(variables={}, extensions=[my_ext])
+cel_env = cel.NewEnv(variables={}, extensions=[my_ext])
 expr = cel_env.compile("my_func(42)")
 
 multiplier = 2

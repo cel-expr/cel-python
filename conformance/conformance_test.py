@@ -27,13 +27,13 @@ from cel.expr import checked_pb2 as checked_pb
 from cel.expr import value_pb2 as value_pb
 from absl.testing import absltest
 from python.runfiles import runfiles
-from py_cel import py_cel as cel
-from py_cel.ext import ext_bindings
-from py_cel.ext import ext_encoders
-from py_cel.ext import ext_math
-from py_cel.ext import ext_optional
-from py_cel.ext import ext_proto
-from py_cel.ext import ext_string
+from cel_expr_python import cel
+from cel_expr_python.ext import ext_bindings
+from cel_expr_python.ext import ext_encoders
+from cel_expr_python.ext import ext_math
+from cel_expr_python.ext import ext_optional
+from cel_expr_python.ext import ext_proto
+from cel_expr_python.ext import ext_string
 from cel.expr.conformance.proto2 import test_all_types_extensions_pb2 as test_all_types_extensions_proto2  # pylint: disable=unused-import
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_proto2  # pylint: disable=unused-import
 from cel.expr.conformance.proto3 import test_all_types_pb2 as test_all_types_proto3  # pylint: disable=unused-import

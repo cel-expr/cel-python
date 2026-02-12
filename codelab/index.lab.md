@@ -1,4 +1,4 @@
-# PyCEL (CEL for Python) Codelab: Fast, safe, embedded expressions
+# cel.expr.python (CEL for Python) Codelab: Fast, safe, embedded expressions
 
 <details>
 <summary>
@@ -24,12 +24,12 @@ lambda expressions. While CEL is commonly used for boolean decisions,
 it can also be used to construct more complex objects like JSON or
 protobuf messages.
 
-### PyCEL - CEL runtime for Python
-PyCEL is a collection of Python APIs for compilation, validation and
+### cel.expr.python - CEL runtime for Python
+Cel.expr.python is a collection of Python APIs for compilation, validation and
 evaluation of CEL expressions. It also includes support for CEL extensions,
 written either in Python or C++.
 
-PyCEL is a wrapper over CEL-C++, which is a flagship implementation of CEL
+Cel.expr.python is a wrapper over CEL-C++, which is a flagship implementation of CEL
 with a robust level of support.
 </details>
 
@@ -63,7 +63,7 @@ compiled expression can be evaluated with many different inputs.
 ### Expressions
 
 Users define expressions, while services and applications define the
-environment in which these expressions are evaluated. PyCEL provides a variety
+environment in which these expressions are evaluated. CEL comes with a variety
 of libraries with common functions for use within these environments.
 
 In the following example, the expression takes a request object that
@@ -143,12 +143,12 @@ function bindings being used across the lifetime of a process (a common case).
 
 </summary>
 
-Before we can start using PyCEL, let's install it in the Python environment:
+Before we can start using cel.expr.python, let's install it in the Python environment:
 ```
-pip install py-cel
+pip install cel-expr-python
 ```
 
-In this codelab, we will be using PyCEL along with some protocol buffers, so let's also
+In this codelab, we will be using CEL along with some protocol buffers, so let's also
 install the corresponding modules:
 ```
 pip install protobuf googleapis-common-protos
@@ -197,10 +197,10 @@ You should see the following output:
 In the tradition of all programming languages, we'll start by creating and evaluating "Hello World!".
 
 ### Configure the environment
-In your editor, open `codelab.py` and note that it starts off by importing the PyCEL module:
+In your editor, open `codelab.py` and note that it starts off by importing the cel_expr_python module:
 
 ```python
-import py_cel as cel
+from cel_expr_python import cel
 ```
 
 In your editor, find the declaration of `exercise1`, and fill in the following to set up the environment:
@@ -442,11 +442,11 @@ Value: True (BOOL)
 
 To use variables that refer to protobuf messages or to handle the construction of protobuf messages, the compiler needs to know the type descriptor. A [type descriptor](https://googleapis.dev/python/protobuf/latest/google/protobuf/descriptor.html) is a protobuf message that describes the field declarations of a protobuf message. Descriptors can be thought of as a reflection type. Descriptors are used within the type-checker to determine field type references.
 
-PyCEL finds
+CEL finds
 type descriptors in the descriptor pool linked to the environment. By default,
-PyCEL uses the automatic descriptor pool that can be accessed as `google.protobuf.descriptor_pool.Default`.
+CEL uses the automatic descriptor pool that can be accessed as `google.protobuf.descriptor_pool.Default`.
 
-The import statement `from google.rpc.context import attribute_context_pb2` at the top of `codelab.py` automatically loads all type descriptors defined within that module into the `Default` descriptor pool used by PyCEL. This is usually sufficient for making necessary type descriptors available.
+The import statement `from google.rpc.context import attribute_context_pb2` at the top of `codelab.py` automatically loads all type descriptors defined within that module into the `Default` descriptor pool used by CEL. This is usually sufficient for making necessary type descriptors available.
 
 **Advanced usage:** To gain more control, you can use an explicitly populated descriptor pool. Pass your custom descriptor pool to `cel.NewEnv` via the `descriptor_pool` argument: `cel.NewEnv(descriptor_pool=mypool)`. Since managing a descriptor pool can be quite involved, refer to the [DescriptorPool API documentation](https://googleapis.dev/python/protobuf/latest/google/protobuf/descriptor_pool.html) and the [Protobuf Tutorial](https://protobuf.dev/getting-started/pythontutorial/#protobuf-api) for further guidance.
 
@@ -672,7 +672,7 @@ In protobuf, we know what fields and types to expect. In map and JSON values, we
 
 </summary>
 
-PyCEL comes with a library of standard functions. You can find their descriptions in
+CEL comes with a library of standard functions. You can find their descriptions in
 this document: [CEL Extensions](https://github.com/google/cel-java/blob/main/extensions/src/main/java/dev/cel/extensions/README.md#extensions)
 
 ### Use functions in an expression

@@ -18,7 +18,7 @@ from google.protobuf import descriptor_pool
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from py_cel import py_cel as cel
+from cel_expr_python import cel
 from custom_ext import sample_cel_ext
 from custom_ext import sample_cel_ext_cc
 

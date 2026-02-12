@@ -31,12 +31,12 @@ echo "Running cibuildwheel: ${CIBWHEEL_BIN}"
 
 echo "Copying generated wheels to ${SRC_DIR}/wheelhouse"
 mkdir -p "${SRC_DIR}"/wheelhouse
-cp wheelhouse/py_cel-*.whl "${SRC_DIR}"/wheelhouse/
+cp wheelhouse/cel-expr-python-*.whl "${SRC_DIR}"/wheelhouse/
 
 echo "Cleaning up build directory: ${TMP_DIR}"
 rm -rf "${TMP_DIR}"
 
 popd
 
-echo "Successfully built py_cel wheels"
+echo "Successfully built cel-expr-python wheels"
 ls -l "${SRC_DIR}"/wheelhouse
