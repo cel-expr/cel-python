@@ -1,4 +1,4 @@
-# CEL Python Wrapper (cel.expr.python)
+# CEL Python Wrapper (cel-expr-python)
 
 This is a Python wrapper for the CEL C++ implementation.
 
@@ -10,7 +10,7 @@ This is a Python wrapper for the CEL C++ implementation.
 from cel_expr_python import cel
 ```
 
-### Creating and configuring Cel
+### Creating and configuring CEL environment
 
 To create a CEL environment, you need to define
 variable types that can be used in expressions.

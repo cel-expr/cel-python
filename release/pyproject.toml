@@ -21,8 +21,15 @@ requires-python = ">=3.11"
 classifiers = [
   "Topic :: Software Development :: Interpreters",
   "Topic :: Software Development :: Libraries :: Python Modules",
+  "Operating System :: POSIX :: Linux",
 ]
 license = "Apache-2.0"
+readme = "README.md"
+
+[project.urls]
+Repository = "https://github.com/cel-expr/cel-python"
+"Bug Tracker" = "https://github.com/cel-expr/cel-python/issues"
+Codelab = "https://github.com/cel-expr/cel-python/blob/main/codelab/index.lab.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
