@@ -1,4 +1,4 @@
-name: PyCEL CI
+name: CEL-expr-python CI
 run-name: Workflow started by ${{ github.actor }}.
 on:
   push:
