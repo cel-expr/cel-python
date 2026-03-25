@@ -18,6 +18,8 @@ pybind_extension(
         "py_cel_arena.h",
         "py_cel_env.cc",
         "py_cel_env.h",
+        "py_cel_env_config.cc",
+        "py_cel_env_config.h",
         "py_cel_env_internal.cc",
         "py_cel_env_internal.h",
         "py_cel_expression.cc",
@@ -76,6 +78,8 @@ pybind_extension(
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//compiler:compiler_factory",
         "@com_google_cel_cpp//compiler:standard_library",
+        "@com_google_cel_cpp//env:config",
+        "@com_google_cel_cpp//env:env_yaml",
         "@com_google_cel_cpp//extensions/protobuf:runtime_adapter",
         "@com_google_cel_cpp//parser:parser_interface",
         "@com_google_cel_cpp//runtime",
@@ -124,5 +128,14 @@ py_test(
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_protobuf//:protobuf",
+    ],
+)
+
+py_test(
+    name = "cel_env_test",
+    srcs = ["cel_env_test.py"],
+    deps = [
+        ":cel",
+        "@com_google_absl_py//absl/testing:absltest",
     ],
 )

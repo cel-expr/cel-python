@@ -15,6 +15,7 @@
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_arena.h"
 #include "cel_expr_python/py_cel_env.h"
+#include "cel_expr_python/py_cel_env_config.h"
 #include "cel_expr_python/py_cel_expression.h"
 #include "cel_expr_python/py_cel_function.h"
 #include "cel_expr_python/py_cel_function_decl.h"
@@ -38,6 +39,7 @@ PYBIND11_MODULE(cel, m) {
   PyCelFunctionDecl::DefinePythonBindings(m);
   PyCelPythonExtension::DefinePythonBindings(m);
   PyCelFunction::DefinePythonBindings(m);
+  PyCelEnvConfig::DefinePythonBindings(m);
   PyCelEnv::DefinePythonBindings(m);
 }
 
