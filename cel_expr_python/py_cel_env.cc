@@ -25,8 +25,10 @@
 #include <vector>
 
 #include "absl/log/absl_check.h"
+#include "env/config.h"
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_arena.h"
+#include "cel_expr_python/py_cel_env_config.h"
 #include "cel_expr_python/py_cel_env_internal.h"
 #include "cel_expr_python/py_cel_expression.h"
 #include "cel_expr_python/py_cel_type.h"
@@ -42,7 +44,7 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
   py::class_<PyCelEnv, std::shared_ptr<PyCelEnv>> cel_class(m, "Env");
   m.def(
       "NewEnv",
-      [](py::object descriptor_pool,
+      [](py::object descriptor_pool, std::optional<PyCelEnvConfig> config,
          std::optional<std::unordered_map<std::string, PyCelType>> variables,
          std::optional<std::vector<py::object>> extensions,
          const std::optional<std::string>& container) {
@@ -70,15 +72,17 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
           }
         }
 
-        return PyCelEnv(pool_ptr,
+        return PyCelEnv(config.value_or(PyCelEnvConfig()), pool_ptr,
                         std::move(variables).value_or(
                             std::unordered_map<std::string, PyCelType>{}),
                         ext_ptrs, container.value_or(""));
       },
-      py::arg("descriptor_pool") = py::none(),
+      py::arg("descriptor_pool") = py::none(), py::arg("config") = py::none(),
       py::arg("variables") = py::none(), py::arg("extensions") = py::none(),
       py::arg("container") = py::none());
   cel_class
+      .def("config",
+           [](PyCelEnv& self) { return self.GetEnv()->GetEnvConfig(); })
       .def("compile", &PyCelEnv::Compile, py::arg("expression"),
            py::arg("disable_check") = false)
       .def("deserialize", &PyCelEnv::Deserialize, py::arg("serialized"))
@@ -108,13 +112,13 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
           py::arg("arena") = nullptr);
 }
 
-PyCelEnv::PyCelEnv(PyObject* descriptor_pool,
+PyCelEnv::PyCelEnv(const PyCelEnvConfig& config, PyObject* descriptor_pool,
                    std::unordered_map<std::string, PyCelType> variable_types,
                    const std::vector<PyObject*>& extensions,
-                   std::string container)
-    : env_(std::make_unique<PyCelEnvInternal>(
-          descriptor_pool, std::move(variable_types), extensions,
-          std::move(container))) {
+                   std::string container) {
+  env_ = ThrowIfError(PyCelEnvInternal::NewCelEnvInternal(
+      config, descriptor_pool, std::move(variable_types), extensions,
+      std::move(container)));
   ABSL_CHECK(PyGILState_Check());
 }
 

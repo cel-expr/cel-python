@@ -25,75 +25,100 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "checker/type_checker_builder.h"
-#include "common/decl.h"
-#include "common/type.h"
 #include "compiler/compiler.h"
-#include "compiler/compiler_factory.h"
-#include "compiler/standard_library.h"
+#include "env/config.h"
+#include "env/env.h"
+#include "env/type_info.h"
 #include "runtime/reference_resolver.h"
 #include "runtime/runtime.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "runtime/standard_runtime_builder_factory.h"
 #include "cel_expr_python/cel_extension.h"
+#include "cel_expr_python/py_cel_env_config.h"
 #include "cel_expr_python/py_cel_python_extension.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_descriptor_database.h"
-#include "cel_expr_python/py_message_factory.h"
 #include "cel_expr_python/status_macros.h"
 #include "google/protobuf/arena.h"
-#include "google/protobuf/descriptor.h"
 #include <pybind11/pybind11.h>
 
 namespace cel_python {
 
 PyCelEnvInternal::PyCelEnvInternal(
-    PyObject* descriptor_pool,
-    std::unordered_map<std::string, PyCelType> variableTypes,
-    const std::vector<PyObject*>& extensions, std::string container)
-    : py_descriptor_database_(descriptor_pool),
-      descriptor_pool_(&py_descriptor_database_),
-      message_factory_(&descriptor_pool_),
+    const PyCelEnvConfig& env_config, PyObject* descriptor_pool,
+    const std::unordered_map<std::string, PyCelType>& variableTypes,
+    const std::vector<PyObject*>& extensions, const std::string& container)
+    : env_config_(env_config),
+      py_descriptor_database_(descriptor_pool),
+      descriptor_pool_(
+          std::make_shared<google::protobuf::DescriptorPool>(&py_descriptor_database_)),
+      message_factory_(descriptor_pool_.get()),
       py_message_factory_(std::make_shared<PyMessageFactory>(descriptor_pool)),
-      variable_types_(std::move(variableTypes)),
       container_(std::move(container)) {
+  cel_env_.SetDescriptorPool(descriptor_pool_);
+  cel_env_.SetConfig(env_config_.GetConfig());
   for (PyObject* ext : extensions) {
     extensions_.push_back(std::make_unique<CelExtensionHandle>(ext));
   }
 }
 
+absl::StatusOr<std::shared_ptr<PyCelEnvInternal>>
+PyCelEnvInternal::NewCelEnvInternal(
+    const PyCelEnvConfig& env_config, PyObject* descriptor_pool,
+    const std::unordered_map<std::string, PyCelType>& variableTypes,
+    const std::vector<PyObject*>& extensions, const std::string& container) {
+  // Copy the config before augmenting it.
+  cel::Config config = env_config.GetConfig();
+
+  // Augment the config with the variable types explicitly passed in the
+  // constructor.
+  for (const auto& [name, type] : variableTypes) {
+    CEL_PYTHON_RETURN_IF_ERROR(
+        config.AddVariableConfig(cel::Config::VariableConfig{
+            .name = name,
+            .type_info = PyCelType::ToTypeInfo(type),
+        }));
+  }
+
+  // Cannot use std::make_shared because the constructor is private.
+  return std::shared_ptr<PyCelEnvInternal>(
+      new PyCelEnvInternal(PyCelEnvConfig(config), descriptor_pool,
+                           variableTypes, extensions, container));
+}
+
 absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
     const std::shared_ptr<PyCelEnvInternal>& env) {
+  ABSL_CHECK(PyGILState_Check());
+
   if (env->compiler_) {
     return env->compiler_.get();
   }
 
-  cel::CompilerOptions compiler_options;
-  compiler_options.parser_options.enable_quoted_identifiers = true;
   CEL_PYTHON_ASSIGN_OR_RETURN(
       std::unique_ptr<cel::CompilerBuilder> compiler_builder,
-      cel::NewCompilerBuilder(&env->descriptor_pool_, compiler_options));
+      env->cel_env_.NewCompilerBuilder());
   compiler_builder->GetCheckerBuilder().set_container(env->container_);
-  CEL_PYTHON_RETURN_IF_ERROR(
-      compiler_builder->AddLibrary(cel::StandardCompilerLibrary()));
   for (std::unique_ptr<CelExtensionHandle>& extension_handle :
        env->extensions_) {
     CEL_PYTHON_ASSIGN_OR_RETURN(CelExtension * extension,
                                 extension_handle->GetExtension(env));
-    CEL_PYTHON_RETURN_IF_ERROR(
-        extension->ConfigureCompiler(*compiler_builder, env->descriptor_pool_));
+    CEL_PYTHON_RETURN_IF_ERROR(extension->ConfigureCompiler(
+        *compiler_builder, *(env->descriptor_pool_.get())));
   }
+
+  // Convert variable types from cel::TypeInfo to PyCelType.
   google::protobuf::Arena* arena = compiler_builder->GetCheckerBuilder().arena();
-  for (const auto& [name, type] : env->variable_types_) {
+  for (const cel::Config::VariableConfig& variable_config :
+       env->env_config_.GetConfig().GetVariableConfigs()) {
     CEL_PYTHON_ASSIGN_OR_RETURN(
         cel::Type cel_type,
-        PyCelType::ToCelType(type, arena, env->descriptor_pool_));
-    cel::VariableDecl var;
-    var.set_name(name);
-    var.set_type(cel_type);
-    CEL_PYTHON_RETURN_IF_ERROR(
-        compiler_builder->GetCheckerBuilder().AddVariable(var));
+        cel::TypeInfoToType(variable_config.type_info,
+                            env->descriptor_pool_.get(), arena));
+    PyCelType py_cel_type = PyCelType::FromCelType(cel_type);
+    env->variable_types_[variable_config.name] = py_cel_type;
   }
+
   CEL_PYTHON_ASSIGN_OR_RETURN(env->compiler_, compiler_builder->Build());
   return env->compiler_.get();
 }
@@ -118,7 +143,7 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
   }
   CEL_PYTHON_ASSIGN_OR_RETURN(
       cel::RuntimeBuilder builder,
-      cel::CreateStandardRuntimeBuilder(&env->descriptor_pool_, opts));
+      cel::CreateStandardRuntimeBuilder(env->descriptor_pool_.get(), opts));
   CEL_PYTHON_RETURN_IF_ERROR(cel::EnableReferenceResolver(
       builder, cel::ReferenceResolverEnabled::kAlways));
   for (std::unique_ptr<CelExtensionHandle>& extension_handle :
