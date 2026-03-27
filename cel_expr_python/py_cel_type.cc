@@ -36,7 +36,9 @@
 #include "common/types/map_type.h"
 #include "common/value.h"
 #include "common/value_kind.h"
+#include "env/config.h"
 #include "cel_expr_python/py_error_status.h"
+#include "cel_expr_python/status_macros.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/descriptor.h"
 #include <pybind11/pybind11.h>
@@ -291,8 +293,10 @@ PyCelType PyCelType::FromCelType(const cel::Type& cel_type) {
     case cel::TypeKind::kInt:
       return PyCelType::Int();
     case cel::TypeKind::kUint:
+      // case cel::TypeKind::kUintWrapper:
       return PyCelType::Uint();
     case cel::TypeKind::kDouble:
+      // case cel::TypeKind::kDoubleWrapper:
       return PyCelType::Double();
     case cel::TypeKind::kString:
       return PyCelType::String();
@@ -304,17 +308,49 @@ PyCelType PyCelType::FromCelType(const cel::Type& cel_type) {
       return PyCelType::Timestamp();
     case cel::TypeKind::kDuration:
       return PyCelType::Duration();
-    case cel::TypeKind::kList:
-      return PyCelType::List();
-    case cel::TypeKind::kMap:
-      return PyCelType::Map();
+    case cel::TypeKind::kList: {
+      const auto& list_type = cel_type.AsList();
+      return PyCelType::ListType(FromCelType(list_type->GetElement()));
+    }
+    case cel::TypeKind::kMap: {
+      const auto& map_type = cel_type.AsMap();
+      return PyCelType::MapType(FromCelType(map_type->GetKey()),
+                                FromCelType(map_type->GetValue()));
+    }
     case cel::TypeKind::kError:
       return PyCelType::Error();
     case cel::TypeKind::kType: {
-      return PyCelType::Type();
+      const auto& type_type = cel_type.AsType();
+      if (type_type->GetParameters().empty()) {
+        return PyCelType::Type();
+      }
+      return PyCelType::TypeType(FromCelType(type_type->GetType()));
     }
+    case cel::TypeKind::kDyn:
+      return PyCelType::Dyn();
+    case cel::TypeKind::kOpaque: {
+      const auto& abstract_type = cel_type.AsOpaque();
+      std::vector<PyCelType> params;
+      for (const cel::Type& param : abstract_type->GetParameters()) {
+        params.push_back(FromCelType(param));
+      }
+      return PyCelType::AbstractType(std::string(cel_type.name()), params);
+    }
+    case cel::TypeKind::kBoolWrapper:
+      return PyCelType(std::string(cel::BoolWrapperType::kName));
+    case cel::TypeKind::kIntWrapper:
+      return PyCelType(std::string(cel::IntWrapperType::kName));
+    case cel::TypeKind::kUintWrapper:
+      return PyCelType(std::string(cel::UintWrapperType::kName));
+    case cel::TypeKind::kDoubleWrapper:
+      return PyCelType(std::string(cel::DoubleWrapperType::kName));
+    case cel::TypeKind::kStringWrapper:
+      return PyCelType(std::string(cel::StringWrapperType::kName));
+    case cel::TypeKind::kBytesWrapper:
+      return PyCelType(std::string(cel::BytesWrapperType::kName));
+    case cel::TypeKind::kAny:
+      return PyCelType(std::string(cel::AnyType::kName));
     default:
-      // TODO(b/447177883): Add support for all standard types.
       return PyCelType::Error();
   }
 }
@@ -541,6 +577,65 @@ absl::StatusOr<cel::Type> PyCelType::ToCelType(
     default:
       return cel::DynType();
   }
+}
+
+cel::Config::TypeInfo PyCelType::ToTypeInfo(const PyCelType& type) {
+  cel::Config::TypeInfo type_info;
+  switch (type.GetKind()) {
+    case cel::Kind::kNull:
+      type_info.name = "null";
+      break;
+    case cel::Kind::kBool:
+      type_info.name = "bool";
+      break;
+    case cel::Kind::kInt:
+      type_info.name = "int";
+      break;
+    case cel::Kind::kUint:
+      type_info.name = "uint";
+      break;
+    case cel::Kind::kDouble:
+      type_info.name = "double";
+      break;
+    case cel::Kind::kString:
+      type_info.name = "string";
+      break;
+    case cel::Kind::kBytes:
+      type_info.name = "bytes";
+      break;
+    case cel::Kind::kMessage:
+      type_info.name = type.GetName();
+      break;
+    case cel::Kind::kList:
+      type_info.name = "list";
+      type_info.params.push_back(ToTypeInfo(type.GetParam(0)));
+      break;
+    case cel::Kind::kMap:
+      type_info.name = "map";
+      type_info.params.push_back(type.GetParamCount() > 0
+                                     ? ToTypeInfo(type.GetParam(0))
+                                     : cel::Config::TypeInfo{.name = "dyn"});
+      type_info.params.push_back(type.GetParamCount() > 1
+                                     ? ToTypeInfo(type.GetParam(1))
+                                     : cel::Config::TypeInfo{.name = "dyn"});
+      break;
+    case cel::Kind::kTimestamp:
+      type_info.name = "timestamp";
+      break;
+    case cel::Kind::kDuration:
+      type_info.name = "duration";
+      break;
+    case cel::Kind::kDyn:
+      type_info.name = "dyn";
+      break;
+    default:
+      type_info.name = type.GetName();
+      for (const PyCelType& param : type.parameters_) {
+        type_info.params.push_back(ToTypeInfo(param));
+      }
+      break;
+  }
+  return type_info;
 }
 
 }  // namespace cel_python

@@ -14,7 +14,7 @@ bazel_dep(name = "bazel_skylib", version = "1.8.2")
 # https://registry.bazel.build/modules/cel-cpp
 bazel_dep(name = "cel-cpp", version = "0.14.0", repo_name = "com_google_cel_cpp")
 
-# 03/25/2026
+# 03/27/2026
 _CEL_CPP_COMMIT = "f6cd0c895e42954475b3734c867e8902557d1b37"
 
 _CEL_CPP_SHA256 = "8af44a84983f190e30ba4e5064ed5f2a2bbd13988a50b5c75288096636f1548b"

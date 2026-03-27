@@ -18,6 +18,7 @@
 
 #include <Python.h>  // IWYU pragma: keep - Needed for PyObject
 
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <vector>
@@ -27,6 +28,7 @@
 #include "common/kind.h"
 #include "common/type.h"
 #include "common/value.h"
+#include "env/config.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/descriptor.h"
 #include <pybind11/pybind11.h>
@@ -65,6 +67,7 @@ class PyCelType {
   bool IsAssignableFrom(const PyCelType& other) const;
   bool IsMessage() const { return kind_ == cel::Kind::kMessage; }
 
+  size_t GetParamCount() const { return parameters_.size(); }
   const PyCelType& GetParam(int index) const { return parameters_[index]; }
 
   std::string ToString() const;
@@ -77,6 +80,7 @@ class PyCelType {
   static absl::StatusOr<cel::Type> ToCelType(
       const PyCelType& type, google::protobuf::Arena* arena,
       const google::protobuf::DescriptorPool& descriptor_pool);
+  static cel::Config::TypeInfo ToTypeInfo(const PyCelType& type);
 
   bool operator==(const PyCelType& other) const;
 

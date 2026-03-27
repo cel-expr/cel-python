@@ -18,7 +18,6 @@
 #include <datetime.h>  // IWYU pragma: keep
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -30,6 +29,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "common/kind.h"
@@ -425,6 +425,18 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
   }
 }
 
+static absl::string_view NormalizeTypeName(absl::string_view type_name) {
+  // 32-bit wrappers are equivalent to 64-bit.
+  if (type_name == "google.protobuf.Int32Value") {
+    return cel::IntWrapperType::kName;
+  } else if (type_name == "google.protobuf.UInt32Value") {
+    return cel::UintWrapperType::kName;
+  } else if (type_name == "google.protobuf.FloatValue") {
+    return cel::DoubleWrapperType::kName;
+  }
+  return type_name;
+}
+
 static cel::ErrorValue InvalidTypeError(
     PyObject* py_object, absl::FunctionRef<std::string()> context,
     const PyCelType& expected_type) {
@@ -651,7 +663,9 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
     case cel::Kind::kMessage: {
       CEL_PYTHON_ASSIGN_OR_RETURN(const PyCelType& type,
                                   PyCelType::ForPyObject(py_object, context));
-      if (!bypass_type_check && type.GetName() != expected_type.GetName()) {
+      if (!bypass_type_check && type.GetName() != expected_type.GetName() &&
+          NormalizeTypeName(type.GetName()) !=
+              NormalizeTypeName(expected_type.GetName())) {
         return InvalidTypeError(py_object, context, expected_type);
       }
 
@@ -710,14 +724,14 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
                                      env->GetMessageFactory(), arena);
     }
     case cel::Kind::kList: {
-      if (bypass_type_check || PyList_Check(py_object)) {
+      if (PyList_Check(py_object)) {
         const PyCelType& element_type = expected_type.GetParam(0);
         Py_ssize_t size = PyList_Size(py_object);
         auto builder = cel::NewListValueBuilder(arena);
         for (int i = 0; i < size; ++i) {
           PyObject* item = PyList_GetItem(py_object, i);
-          // Note: PyList_GetItem returns a borrowed reference, so we shouldn't
-          // DECREF it.
+          // Note: PyList_GetItem returns a borrowed reference, so we
+          // shouldn't DECREF it.
           CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_value,
                                       PyObjectToCelValue(
                                           item, element_type,
@@ -729,11 +743,19 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           CEL_PYTHON_RETURN_IF_ERROR(builder->Add(converted_value));
         }
         return std::move(*builder).Build();
+      } else {
+        CEL_PYTHON_ASSIGN_OR_RETURN(const PyCelType& object_type,
+                                    PyCelType::ForPyObject(py_object, context));
+        if (object_type.IsMessage() &&
+            object_type.GetName() == "google.protobuf.ListValue") {
+          return PyObjectToCelValue(py_object, object_type, context, env, arena,
+                                    /*bypass_type_check=*/true);
+        }
       }
       return InvalidTypeError(py_object, context, expected_type);
     }
     case cel::Kind::kMap: {
-      if (bypass_type_check || PyDict_Check(py_object)) {
+      if (PyDict_Check(py_object)) {
         const PyCelType& key_type = expected_type.GetParam(0);
         const PyCelType& value_type = expected_type.GetParam(1);
         PyObject *key, *value;
@@ -768,6 +790,14 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
               builder->Put(converted_key, converted_value));
         }
         return std::move(*builder).Build();
+      } else {
+        CEL_PYTHON_ASSIGN_OR_RETURN(const PyCelType& object_type,
+                                    PyCelType::ForPyObject(py_object, context));
+        if (object_type.IsMessage() &&
+            object_type.GetName() == "google.protobuf.Struct") {
+          return PyObjectToCelValue(py_object, object_type, context, env, arena,
+                                    /*bypass_type_check=*/true);
+        }
       }
       return InvalidTypeError(py_object, context, expected_type);
     }
