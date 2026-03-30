@@ -20,6 +20,7 @@ ability to be created from and serialized to YAML format.
 
 from absl.testing import absltest
 from cel_expr_python import cel
+from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 
 
 class CelEnvTest(absltest.TestCase):
@@ -85,10 +86,155 @@ class CelEnvTest(absltest.TestCase):
       cel.NewEnvConfigFromYaml(" invalid yaml")
     self.assertIn(
         "1:2: Invalid CEL environment config YAML\n"
-        "| invalid yaml\n"
-        "| ^",
+        + "| invalid yaml\n"
+        + "| ^",
         str(e.exception),
     )
+
+  def test_config_export_variables(self):
+    config = cel.NewEnv(
+        variables={
+            "var_bool": cel.Type.BOOL,
+            "var_int": cel.Type.INT,
+            "var_uint": cel.Type.UINT,
+            "var_double": cel.Type.DOUBLE,
+            "var_str": cel.Type.STRING,
+            "var_bytes": cel.Type.BYTES,
+            "var_msg": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+            "var_string_list": cel.Type.List(cel.Type.STRING),
+            "var_timestamp": cel.Type.TIMESTAMP,
+            "var_duration": cel.Type.DURATION,
+            "var_dyn_list": cel.Type.LIST,
+            "var_int_map": cel.Type.Map(cel.Type.INT, cel.Type.STRING),
+            "var_string_map": cel.Type.Map(cel.Type.STRING, cel.Type.BOOL),
+            "var_dyn_map": cel.Type.MAP,
+            "var_dyn": cel.Type.DYN,
+        }
+    )
+    yaml = config.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          variables:
+            - name: "var_bool"
+              type_name: "bool"
+            - name: "var_bytes"
+              type_name: "bytes"
+            - name: "var_double"
+              type_name: "double"
+            - name: "var_duration"
+              type_name: "duration"
+            - name: "var_dyn"
+              type_name: "dyn"
+            - name: "var_dyn_list"
+              type_name: "list"
+              params:
+                - type_name: "dyn"
+            - name: "var_dyn_map"
+              type_name: "map"
+              params:
+                - type_name: "dyn"
+                - type_name: "dyn"
+            - name: "var_int"
+              type_name: "int"
+            - name: "var_int_map"
+              type_name: "map"
+              params:
+                - type_name: "int"
+                - type_name: "string"
+            - name: "var_msg"
+              type_name: "cel.expr.conformance.proto2.TestAllTypes"
+            - name: "var_str"
+              type_name: "string"
+            - name: "var_string_list"
+              type_name: "list"
+              params:
+                - type_name: "string"
+            - name: "var_string_map"
+              type_name: "map"
+              params:
+                - type_name: "string"
+                - type_name: "bool"
+            - name: "var_timestamp"
+              type_name: "timestamp"
+            - name: "var_uint"
+              type_name: "uint"
+      """),
+    )
+
+  def test_config_augmented_variables(self):
+    config = cel.NewEnvConfigFromYaml("""
+      variables:
+        - name: "var_bool"
+          type_name: "bool"
+      """)
+    env = cel.NewEnv(
+        config=config,
+        variables={
+            "var_msg": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+        },
+    )
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          variables:
+            - name: "var_bool"
+              type_name: "bool"
+            - name: "var_msg"
+              type_name: "cel.expr.conformance.proto2.TestAllTypes"
+        """),
+    )
+
+  def test_config_variable_override(self):
+    config = cel.NewEnvConfigFromYaml("""
+      variables:
+        - name: "var_bool"
+          type_name: "bool"
+      """)
+
+    with self.assertRaises(Exception) as e:
+      cel.NewEnv(
+          config=config,
+          variables={
+              "var_bool": cel.Type.INT,
+          },
+      )
+    self.assertIn(
+        "Variable 'var_bool' is already included",
+        str(e.exception),
+    )
+
+  def test_config_variable_types(self):
+    config = cel.NewEnvConfigFromYaml("""
+      variables:
+        - name: "var_bool"
+          type_name: "bool"
+        - name: "var_int"
+          type_name: "int"
+          value: 42
+      """)
+    env = cel.NewEnv(
+        config=config,
+        variables={
+            "var_msg": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+        },
+    )
+    data = {
+        "var_bool": True,
+        "var_msg": test_all_types_pb.TestAllTypes(single_string="hello"),
+    }
+    res = env.compile("var_bool").eval(data=data)
+    self.assertEqual(res.type(), cel.Type.BOOL)
+    self.assertTrue(res.value())
+
+    res = env.compile("var_msg.single_string").eval(data=data)
+    self.assertEqual(res.type(), cel.Type.STRING)
+    self.assertEqual(res.value(), "hello")
+
+    res = env.compile("var_int").eval(data=data)
+    self.assertEqual(res.type(), cel.Type.INT)
+    self.assertEqual(res.value(), 42)
 
 
 def normalize_yaml(yaml: str) -> str:

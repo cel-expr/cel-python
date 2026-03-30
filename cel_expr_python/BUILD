@@ -76,8 +76,7 @@ pybind_extension(
         "@com_google_cel_cpp//common:value",
         "@com_google_cel_cpp//common:value_kind",
         "@com_google_cel_cpp//compiler",
-        "@com_google_cel_cpp//compiler:compiler_factory",
-        "@com_google_cel_cpp//compiler:standard_library",
+        "@com_google_cel_cpp//env",
         "@com_google_cel_cpp//env:config",
         "@com_google_cel_cpp//env:env_yaml",
         "@com_google_cel_cpp//extensions/protobuf:runtime_adapter",
@@ -136,6 +135,7 @@ py_test(
     srcs = ["cel_env_test.py"],
     deps = [
         ":cel",
+        "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
     ],
 )

@@ -27,8 +27,13 @@ class PyCelEnvConfig {
  public:
   static void DefinePythonBindings(pybind11::module& m);
 
+  PyCelEnvConfig() = default;
+  explicit PyCelEnvConfig(const cel::Config& config) : config_(config) {}
+
   static PyCelEnvConfig FromYaml(std::string yaml);
   std::string ToYaml() const;
+
+  const cel::Config& GetConfig() const { return config_; }
 
  private:
   cel::Config config_;
