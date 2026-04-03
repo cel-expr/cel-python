@@ -24,7 +24,6 @@
 #include "runtime/runtime_options.h"
 #include "cel_expr_python/cel_extension.h"
 #include "cel_expr_python/py_cel_function_decl.h"
-#include "google/protobuf/descriptor.h"
 #include <pybind11/pybind11.h>
 
 namespace cel_python {
@@ -36,9 +35,7 @@ class PyCelPythonExtension : public CelExtension {
                        std::vector<PyCelFunctionDecl> functions);
 
  protected:
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override;
+  cel::CompilerLibrary GetCompilerLibrary() override;
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
                                 const cel::RuntimeOptions& opts) override;

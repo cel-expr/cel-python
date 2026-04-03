@@ -61,19 +61,22 @@ PyCelPythonExtension::PyCelPythonExtension(
     std::string name, std::vector<PyCelFunctionDecl> functions)
     : CelExtension(std::move(name)), functions_(std::move(functions)) {}
 
-absl::Status PyCelPythonExtension::ConfigureCompiler(
-    cel::CompilerBuilder& compiler_builder,
-    const google::protobuf::DescriptorPool& descriptor_pool) {
-  google::protobuf::Arena* arena = compiler_builder.GetCheckerBuilder().arena();
-  for (const PyCelFunctionDecl& function : functions_) {
+namespace {
+
+absl::Status ConfigureChecker(cel::TypeCheckerBuilder& checker_builder,
+                              const std::vector<PyCelFunctionDecl>& functions) {
+  google::protobuf::Arena* arena = checker_builder.arena();
+  const google::protobuf::DescriptorPool* descriptor_pool =
+      checker_builder.descriptor_pool();
+  for (const PyCelFunctionDecl& function : functions) {
     cel::FunctionDecl function_decl;
     function_decl.set_name(function.name());
     for (const PyCelOverload& overload : function.overloads()) {
       cel::OverloadDecl overload_decl;
       overload_decl.set_id(overload.overload_id());
       CEL_PYTHON_ASSIGN_OR_RETURN(
-          cel::Type cel_type,
-          PyCelType::ToCelType(overload.return_type(), arena, descriptor_pool));
+          cel::Type cel_type, PyCelType::ToCelType(overload.return_type(),
+                                                   arena, *descriptor_pool));
       overload_decl.set_result(cel_type);
       overload_decl.set_member(overload.is_member());
       auto& mutable_args = overload_decl.mutable_args();
@@ -81,17 +84,27 @@ absl::Status PyCelPythonExtension::ConfigureCompiler(
       for (const auto& arg : overload.parameters()) {
         CEL_PYTHON_ASSIGN_OR_RETURN(
             cel::Type cel_type,
-            PyCelType::ToCelType(arg, arena, descriptor_pool));
+            PyCelType::ToCelType(arg, arena, *descriptor_pool));
         mutable_args.push_back(cel_type);
       }
       CEL_PYTHON_RETURN_IF_ERROR(
           function_decl.AddOverload(std::move(overload_decl)));
     }
-    CEL_PYTHON_RETURN_IF_ERROR(
-        compiler_builder.GetCheckerBuilder().MergeFunction(function_decl));
+    CEL_PYTHON_RETURN_IF_ERROR(checker_builder.MergeFunction(function_decl));
   }
 
   return absl::OkStatus();
+}
+}  // namespace
+
+cel::CompilerLibrary PyCelPythonExtension::GetCompilerLibrary() {
+  return cel::CompilerLibrary(
+      name(),
+      /*configure_parser=*/nullptr,
+      /*configure_checker=*/
+      [this](cel::TypeCheckerBuilder& checker_builder) -> absl::Status {
+        return ConfigureChecker(checker_builder, functions_);
+      });
 }
 
 absl::Status PyCelPythonExtension::ConfigureRuntime(

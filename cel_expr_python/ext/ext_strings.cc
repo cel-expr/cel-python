@@ -13,33 +13,42 @@
 // limitations under the License.
 
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "compiler/compiler.h"
 #include "extensions/strings.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "cel_expr_python/cel_extension.h"
-#include "google/protobuf/descriptor.h"
+#include "cel_expr_python/py_error_status.h"
 
 namespace cel_python {
 
-class ExtString : public CelExtension {
+class ExtStrings : public CelExtension {
  public:
-  explicit ExtString() : CelExtension("cel.lib.ext.string") {}
+  explicit ExtStrings(int version)
+      : CelExtension("cel.lib.ext.strings", "strings", version) {
+    if (version < 0 ||
+        version > cel::extensions::kStringsExtensionLatestVersion) {
+      throw StatusToException(absl::InvalidArgumentError(absl::StrCat(
+          "'strings' extension version: ", version, " not in range [0, ",
+          cel::extensions::kStringsExtensionLatestVersion, "]")));
+    }
+  }
 
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override {
-    return compiler_builder.AddLibrary(
-        cel::extensions::StringsCompilerLibrary());
+  ExtStrings() : ExtStrings(cel::extensions::kStringsExtensionLatestVersion) {}
+
+  cel::CompilerLibrary GetCompilerLibrary() override {
+    return cel::extensions::StringsCompilerLibrary(version());
   }
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
                                 const cel::RuntimeOptions& opts) override {
     return cel::extensions::RegisterStringsFunctions(
-        runtime_builder.function_registry(), opts);
+        runtime_builder.function_registry(), opts,
+        cel::extensions::StringsExtensionOptions{.version = version()});
   }
 };
 
-CEL_EXTENSION_MODULE(ext_string, ExtString);
+CEL_VERSIONED_EXTENSION_MODULE(ext_strings, ExtStrings);
 
 }  // namespace cel_python

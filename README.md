@@ -188,6 +188,76 @@ Resulting message type: <class '...TestAllTypes'>
 Resulting message value: 123
 ```
 
+### Custom functions
+
+When configuring `cel.Env` you can supply custom functions. For each function
+there needs to be a declaration and an implementation. The implementation, which
+is a Python function, can be provided either as part of the declaration
+or separately.
+
+Let's say we want to be able to invoke this function from CEL expressions:
+```python
+  def good_time_of_day(ampm, arg):
+    if ampm == 'am':
+      time_of_day = 'morning'
+    else:
+      time_of_day = 'afternoon'
+    return f"Good {time_of_day}, {arg}"
+```
+
+The implementation can be supplied along with the declaration:
+```python
+  cel_env = cel.NewEnv(functions=[
+            cel.FunctionDecl(
+                "hello",
+                [
+                    cel.Overload(
+                        "hello(string,string)",
+                        return_type=cel.Type.STRING,
+                        parameters=[
+                            cel.Type.STRING,
+                            cel.Type.STRING,
+                        ],
+                        impl=good_time_of_day,
+                    )
+                ],
+            )
+        ])
+```
+
+It can also be provided separately in a dictionary that maps overload IDs to
+their respective implementations:
+
+```python
+  cel_env = cel.NewEnv(functions=[
+            cel.FunctionDecl(
+                "hello",
+                [
+                    cel.Overload(
+                        "hello(string,string)",
+                        return_type=cel.Type.STRING,
+                        parameters=[
+                            cel.Type.STRING,
+                            cel.Type.STRING,
+                        ],
+                    )
+                ],
+            )
+        ],
+        function_impls={
+            "hello(string,string)": good_time_of_day,
+        })
+```
+
+Now that the function implementation is bound to the CEL environment,
+we can invoke it from CEL like this:
+```python
+    result = env.compile("hello('am', 'breakfast is ready!')").eval()
+    print(result.value())   # Good morning, breakfast is ready!
+    result = env.compile("hello('pm', 'tea is served.')").eval()
+    print(result.value())   # Good afternoon, tea is served.
+```
+
 ### Extensions
 
 #### Standard extensions
@@ -234,36 +304,34 @@ expr = cel_env.compile("my_func(1)")
 
 To define a custom extension in C++, define a class extending
 `cel_python::CelExtension`. There are two methods you will need to implement:
-`ConfigureCompiler` and `ConfigureRuntime`. The implementations of these methods
-use the same API as extensions written for the C++ CEL runtime. In fact,
+`GetCompilerLibrary` and `ConfigureRuntime`. The implementations of these
+methods use the same API as extensions written for the C++ CEL runtime. In fact,
 extensions written for the C++ runtime can be used unchanged with
 cel-expr-python - you would just need to write a trivial wrapper class invoking
 the registration functions defined by the C++ extension.
 
-```cpp
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const proto2::DescriptorPool& descriptor_pool);
-```
 This method adds extension function definitions to the provided
 `CompilerBuilder`, for example:
 
 ```cpp
-absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const proto2::DescriptorPool& descriptor_pool) {
-    CEL_PYTHON_ASSIGN_OR_RETURN(
-        auto func_translate,
-        cel::MakeFunctionDecl("translate",
-            cel::MakeMemberOverloadDecl("translate_inst",
-                                /*return_type=*/cel::StringType(),
-                                /*target=*/cel::StringType(),
-                                /*from_lang=*/cel::StringType(),
-                                /*to_lang=*/cel::StringType())));
-    CEL_PYTHON_RETURN_IF_ERROR(
-        compiler_builder.GetCheckerBuilder().AddFunction(func_translate));
-    return absl::OkStatus();
-}
+  cel::CompilerLibrary GetCompilerLibrary() {
+    return cel::CompilerLibrary(
+        "translate-ext",
+        [](cel::TypeCheckerBuilder& checker_builder) -> absl::Status {
+          CEL_PYTHON_ASSIGN_OR_RETURN(
+              auto func_translate,
+              cel::MakeFunctionDecl(
+                  "translate",
+                  cel::MakeMemberOverloadDecl("translate_inst",
+                                              /*return_type=*/cel::StringType(),
+                                              /*target=*/cel::StringType(),
+                                              /*from_lang=*/cel::StringType(),
+                                              /*to_lang=*/cel::StringType())));
+          CEL_PYTHON_RETURN_IF_ERROR(
+              checker_builder.AddFunction(func_translate));
+          return absl::OkStatus();
+        });
+  }
 ```
 
 The other method registers the actual implementation

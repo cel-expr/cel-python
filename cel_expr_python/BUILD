@@ -63,6 +63,7 @@ pybind_extension(
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
         "@com_google_cel_cpp//checker:type_checker_builder",
+        "@com_google_cel_cpp//checker:type_checker_builder_factory",
         "@com_google_cel_cpp//checker:validation_result",
         "@com_google_cel_cpp//common:ast",
         "@com_google_cel_cpp//common:ast_proto",
@@ -78,8 +79,13 @@ pybind_extension(
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//env",
         "@com_google_cel_cpp//env:config",
+        "@com_google_cel_cpp//env:env_runtime",
+        "@com_google_cel_cpp//env:env_std_extensions",
         "@com_google_cel_cpp//env:env_yaml",
+        "@com_google_cel_cpp//env:runtime_std_extensions",
         "@com_google_cel_cpp//extensions/protobuf:runtime_adapter",
+        "@com_google_cel_cpp//parser",
+        "@com_google_cel_cpp//parser:options",
         "@com_google_cel_cpp//parser:parser_interface",
         "@com_google_cel_cpp//runtime",
         "@com_google_cel_cpp//runtime:activation",
@@ -88,7 +94,6 @@ pybind_extension(
         "@com_google_cel_cpp//runtime:reference_resolver",
         "@com_google_cel_cpp//runtime:runtime_builder",
         "@com_google_cel_cpp//runtime:runtime_options",
-        "@com_google_cel_cpp//runtime:standard_runtime_builder_factory",
         "@com_google_cel_spec//proto/cel/expr:checked_cc_proto",
         "@com_google_cel_spec//proto/cel/expr:syntax_cc_proto",
         "@com_google_protobuf//:protobuf",
@@ -99,14 +104,25 @@ pybind_extension(
 # For pybind11-based CEL extensions.
 pybind_library(
     name = "cel_extension",
-    hdrs = ["cel_extension.h"],
+    srcs = [
+        "py_error_status.cc",
+    ],
+    hdrs = [
+        "cel_extension.h",
+        "py_error_status.h",
+    ],
     visibility = ["//visibility:public"],
     deps = [
+        ":status_macros",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log:absl_check",
+        "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//runtime:runtime_builder",
         "@com_google_cel_cpp//runtime:runtime_options",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -135,6 +151,10 @@ py_test(
     srcs = ["cel_env_test.py"],
     deps = [
         ":cel",
+        "//cel_expr_python/ext:ext_bindings",
+        "//cel_expr_python/ext:ext_math",
+        "//cel_expr_python/ext:ext_optional",
+        "//cel_expr_python/ext:ext_strings",
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
     ],

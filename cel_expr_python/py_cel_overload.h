@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "env/config.h"
 #include "cel_expr_python/py_cel_type.h"
 #include <pybind11/pybind11.h>
 
@@ -43,6 +44,8 @@ class PyCelOverload {
   const std::vector<PyCelType>& parameters() const { return parameters_; }
   bool is_member() const { return is_member_; }
   py::object py_function() const { return py_function_; }
+
+  cel::Config::FunctionOverloadConfig ToFunctionOverloadConfig() const;
 
  private:
   std::string overload_id_;

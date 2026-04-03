@@ -11,7 +11,6 @@ pybind_extension(
         "//cel_expr_python:cel",
     ],
     deps = [
-        "//cel_expr_python:cel",
         "//cel_expr_python:cel_extension",
         "//cel_expr_python:status_macros",
         "@com_google_absl//absl/base:nullability",

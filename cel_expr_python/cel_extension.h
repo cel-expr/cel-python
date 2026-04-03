@@ -24,7 +24,6 @@
 #include "compiler/compiler.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "google/protobuf/descriptor.h"
 
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS)
 // This include causes many issues if included in C++ environments that don't
@@ -39,13 +38,13 @@ namespace cel_python {
 // Python.
 class CelExtension {
  public:
-  explicit CelExtension(std::string name) : name_(std::move(name)) {};
+  explicit CelExtension(std::string name, std::string alias = "",
+                        int version = -1)
+      : name_(std::move(name)), alias_(std::move(alias)), version_(version) {}
   virtual ~CelExtension() = default;
 
-  virtual absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) {
-    return absl::OkStatus();
+  virtual cel::CompilerLibrary GetCompilerLibrary() {
+    return cel::CompilerLibrary(name_, nullptr, nullptr);
   }
 
   virtual absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
@@ -54,9 +53,13 @@ class CelExtension {
   }
 
   std::string name() const { return name_; }
+  std::string alias() const { return alias_; }
+  int version() const { return version_; }
 
  private:
   std::string name_;
+  std::string alias_;
+  int version_;
 };
 
 #define CEL_MODULE_NAME "cel_expr_python.cel"
@@ -76,13 +79,20 @@ class CelExtension {
 //
 //   CEL_EXTENSION_MODULE(sample_cel_ext, SampleCelExtension);
 //
-#define CEL_EXTENSION_MODULE(module_name, class_name)                        \
-  PYBIND11_MODULE(module_name, m) {                                          \
-    pybind11::module_::import(CEL_MODULE_NAME);                           \
+#define CEL_EXTENSION_MODULE(module_name, class_name)                      \
+  PYBIND11_MODULE(module_name, m) {                                        \
+    pybind11::module_::import(CEL_MODULE_NAME);                            \
     pybind11::class_<class_name, cel_python::CelExtension>(m, #class_name) \
-        .def(pybind11::init<>());                                            \
+        .def(pybind11::init<>());                                          \
   }
 
+#define CEL_VERSIONED_EXTENSION_MODULE(module_name, class_name)            \
+  PYBIND11_MODULE(module_name, m) {                                        \
+    pybind11::module_::import(CEL_MODULE_NAME);                            \
+    pybind11::class_<class_name, cel_python::CelExtension>(m, #class_name) \
+        .def(pybind11::init<>())                                           \
+        .def(pybind11::init<int>(), pybind11::arg("version"));             \
+  }
 }  // namespace cel_python
 
 #endif  // THIRD_PARTY_CEL_PYTHON_CEL_EXTENSION_H_
