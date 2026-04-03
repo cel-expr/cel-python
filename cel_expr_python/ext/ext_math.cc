@@ -13,35 +13,41 @@
 // limitations under the License.
 
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "compiler/compiler.h"
 #include "extensions/math_ext.h"
 #include "extensions/math_ext_decls.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "cel_expr_python/cel_extension.h"
-#include "cel_expr_python/status_macros.h"
-#include "google/protobuf/descriptor.h"
+#include "cel_expr_python/py_error_status.h"
 
 namespace cel_python {
 
 class ExtMath : public CelExtension {
  public:
-  explicit ExtMath() : CelExtension("cel.lib.ext.math") {}
+  explicit ExtMath(int version)
+      : CelExtension("cel.lib.ext.math", "math", version) {
+    if (version < 0 || version > cel::extensions::kMathExtensionLatestVersion) {
+      throw StatusToException(absl::InvalidArgumentError(absl::StrCat(
+          "'math' extension version: ", version, " not in range [0, ",
+          cel::extensions::kMathExtensionLatestVersion, "]")));
+    }
+  }
 
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override {
-    return compiler_builder.AddLibrary(cel::extensions::MathCompilerLibrary());
+  ExtMath() : ExtMath(cel::extensions::kMathExtensionLatestVersion) {}
+
+  cel::CompilerLibrary GetCompilerLibrary() override {
+    return cel::extensions::MathCompilerLibrary(version());
   }
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
                                 const cel::RuntimeOptions& opts) override {
-    CEL_PYTHON_RETURN_IF_ERROR(cel::extensions::RegisterMathExtensionFunctions(
-        runtime_builder.function_registry(), opts));
-    return absl::OkStatus();
+    return cel::extensions::RegisterMathExtensionFunctions(
+        runtime_builder.function_registry(), opts, version());
   }
 };
 
-CEL_EXTENSION_MODULE(ext_math, ExtMath);
+CEL_VERSIONED_EXTENSION_MODULE(ext_math, ExtMath);
 
 }  // namespace cel_python

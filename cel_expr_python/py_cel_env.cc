@@ -31,6 +31,7 @@
 #include "cel_expr_python/py_cel_env_config.h"
 #include "cel_expr_python/py_cel_env_internal.h"
 #include "cel_expr_python/py_cel_expression.h"
+#include "cel_expr_python/py_cel_function_decl.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_error_status.h"
 #include <pybind11/pybind11.h>
@@ -44,10 +45,14 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
   py::class_<PyCelEnv, std::shared_ptr<PyCelEnv>> cel_class(m, "Env");
   m.def(
       "NewEnv",
-      [](py::object descriptor_pool, std::optional<PyCelEnvConfig> config,
-         std::optional<std::unordered_map<std::string, PyCelType>> variables,
-         std::optional<std::vector<py::object>> extensions,
-         const std::optional<std::string>& container) {
+      [](py::object descriptor_pool, std::optional<PyCelEnvConfig>& config,
+         std::optional<std::unordered_map<std::string, PyCelType>>& variables,
+         std::optional<std::vector<py::object>>& extensions,
+         const std::optional<std::string>& container,
+         std::optional<std::vector<std::shared_ptr<PyCelFunctionDecl>>>&
+             functions,
+         std::optional<std::unordered_map<std::string, py::object>>&
+             function_impls) {
         PyObject* pool_ptr;
         if (descriptor_pool.is_none()) {
           // Replicates python's `descriptor_pool.Default()`
@@ -75,11 +80,16 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
         return PyCelEnv(config.value_or(PyCelEnvConfig()), pool_ptr,
                         std::move(variables).value_or(
                             std::unordered_map<std::string, PyCelType>{}),
-                        ext_ptrs, container.value_or(""));
+                        ext_ptrs, container.value_or(""),
+                        functions.value_or(
+                            std::vector<std::shared_ptr<PyCelFunctionDecl>>{}),
+                        function_impls.value_or(
+                            std::unordered_map<std::string, py::object>{}));
       },
       py::arg("descriptor_pool") = py::none(), py::arg("config") = py::none(),
       py::arg("variables") = py::none(), py::arg("extensions") = py::none(),
-      py::arg("container") = py::none());
+      py::arg("container") = py::none(), py::arg("functions") = py::none(),
+      py::arg("function_impls") = py::none());
   cel_class
       .def("config",
            [](PyCelEnv& self) { return self.GetEnv()->GetEnvConfig(); })
@@ -112,13 +122,15 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
           py::arg("arena") = nullptr);
 }
 
-PyCelEnv::PyCelEnv(const PyCelEnvConfig& config, PyObject* descriptor_pool,
-                   std::unordered_map<std::string, PyCelType> variable_types,
-                   const std::vector<PyObject*>& extensions,
-                   std::string container) {
+PyCelEnv::PyCelEnv(
+    const PyCelEnvConfig& config, PyObject* descriptor_pool,
+    const std::unordered_map<std::string, PyCelType>& variable_types,
+    const std::vector<PyObject*>& extensions, const std::string& container,
+    const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
+    const std::unordered_map<std::string, py::object>& function_impls) {
   env_ = ThrowIfError(PyCelEnvInternal::NewCelEnvInternal(
       config, descriptor_pool, std::move(variable_types), extensions,
-      std::move(container)));
+      std::move(container), std::move(functions), std::move(function_impls)));
   ABSL_CHECK(PyGILState_Check());
 }
 

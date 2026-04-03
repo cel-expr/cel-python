@@ -18,8 +18,14 @@ This module contains tests for the `cel.EnvConfig` class, focusing on its
 ability to be created from and serialized to YAML format.
 """
 
+import textwrap
+
 from absl.testing import absltest
 from cel_expr_python import cel
+from cel_expr_python.ext import ext_bindings
+from cel_expr_python.ext import ext_math
+from cel_expr_python.ext import ext_optional
+from cel_expr_python.ext import ext_strings
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 
 
@@ -89,6 +95,16 @@ class CelEnvTest(absltest.TestCase):
         + "| invalid yaml\n"
         + "| ^",
         str(e.exception),
+    )
+
+  def test_config_export_container(self):
+    env = cel.NewEnv(container="test.container")
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          container: "test.container"
+        """),
     )
 
   def test_config_export_variables(self):
@@ -236,27 +252,247 @@ class CelEnvTest(absltest.TestCase):
     self.assertEqual(res.type(), cel.Type.INT)
     self.assertEqual(res.value(), 42)
 
+  def test_config_export_extension_version(self):
+    env = cel.NewEnv(
+        extensions=[
+            ext_math.ExtMath(0),
+            ext_optional.ExtOptional(1),
+            ext_strings.ExtStrings(2),
+            ext_bindings.ExtBindings(),
+        ],
+    )
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          extensions:
+            - name: "bindings"
+            - name: "math"
+              version: 0
+            - name: "optional"
+              version: 1
+            - name: "strings"
+              version: 2
+        """),
+    )
+
+  def test_config_extension_version_out_of_range(self):
+    cases = [
+        [
+            lambda: ext_math.ExtMath(42),
+            r"'math' extension version: 42 not in range \[0, \d+\]",
+        ],
+        [
+            lambda: ext_optional.ExtOptional(6),
+            r"'optional' extension version: 6 not in range \[0, \d+\]",
+        ],
+        [
+            lambda: ext_strings.ExtStrings(18),
+            r"'strings' extension version: 18 not in range \[0, \d+\]",
+        ],
+    ]
+    for test_case in cases:
+      with self.assertRaises(Exception) as e:
+        cel.NewEnv(
+            extensions=[test_case[0]()],
+        )
+      self.assertRegex(str(e.exception), test_case[1])
+
+  def test_config_extensions(self):
+    config = cel.NewEnvConfigFromYaml("""
+      extensions:
+        - name: math
+        - name: strings
+      """)
+    env = cel.NewEnv(
+        config=config,
+        extensions=[TestCelExtension()],
+    )
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          extensions:
+            - name: "math"
+            - name: "strings"
+            - name: "test_cel_extension"
+        """),
+    )
+    res = env.compile("'%.4f'.format([math.sqrt(2)])").eval()
+    self.assertEqual(res.value(), "1.4142")
+    res = env.compile("hello('World')").eval()
+    self.assertEqual(res.value(), "Hello, World!")
+
+  def test_config_extension_override_same_version(self):
+    config = cel.NewEnvConfigFromYaml("""
+      extensions:
+        - name: cel.lib.ext.math
+          version: 1
+        - name: strings
+          version: 2
+      """)
+    env = cel.NewEnv(
+        config=config,
+        extensions=[ext_math.ExtMath(1), ext_strings.ExtStrings(2)],
+    )
+    res = env.compile("'%.3f'.format([math.floor(3.14)])").eval()
+    self.assertEqual(res.value(), "3.000")
+
+  def test_config_extension_override_different_version(self):
+    config = cel.NewEnvConfigFromYaml("""
+      extensions:
+        - name: math
+          version: 0
+        - name: cel.lib.ext.strings
+          version: 2
+      """)
+    with self.assertRaises(Exception) as e:
+      cel.NewEnv(
+          config=config,
+          extensions=[ext_math.ExtMath()],
+      )
+    self.assertIn(
+        "Extension 'math' version 0 is already included. Cannot"
+        " also include version 2",
+        str(e.exception),
+    )
+    with self.assertRaises(Exception) as e:
+      cel.NewEnv(
+          config=config,
+          extensions=[ext_strings.ExtStrings(1)],
+      )
+    self.assertIn(
+        "Extension 'cel.lib.ext.strings' version 2 is already included. Cannot"
+        " also include version 1",
+        str(e.exception),
+    )
+
+  def test_config_functions(self):
+    config = cel.NewEnvConfigFromYaml("""
+      functions:
+        - name: is_ok
+          overloads:
+            - id: "is_ok_string"
+              target:
+                type_name: string
+              return:
+                type_name: bool
+      """)
+    env = cel.NewEnv(
+        config=config,
+        functions=[
+            cel.FunctionDecl(
+                "hello",
+                [
+                    cel.Overload(
+                        "good_time_of_day",
+                        return_type=cel.Type.STRING,
+                        parameters=[
+                            cel.Type.STRING,
+                            cel.Type.STRING,
+                        ],
+                        impl=lambda ampm, arg: (
+                            "Good"
+                            f" {'morning' if ampm == 'am' else 'afternoon'},"
+                            f" {arg}!"
+                        ),
+                    )
+                ],
+            )
+        ],
+        function_impls={
+            "is_ok_string": lambda arg: arg in ["excellent", "good", "fair"],
+        },
+    )
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          functions:
+            - name: "hello"
+              overloads:
+                - id: "good_time_of_day"
+                  args:
+                    - type_name: "string"
+                    - type_name: "string"
+                  return:
+                    type_name: "string"
+            - name: "is_ok"
+              overloads:
+                - id: "is_ok_string"
+                  target:
+                    type_name: "string"
+                  return:
+                    type_name: "bool"
+        """),
+    )
+    res = env.compile("hello('am', 'Sunshine')").eval()
+    self.assertEqual(res.value(), "Good morning, Sunshine!")
+    res = env.compile("hello('pm', 'tea is served')").eval()
+    self.assertEqual(res.value(), "Good afternoon, tea is served!")
+    res = env.compile("'good'.is_ok()").eval()
+    self.assertTrue(res.value())
+    res = env.compile("'bad'.is_ok()").eval()
+    self.assertFalse(res.value())
+
+  def test_config_function_override(self):
+    config = cel.NewEnvConfigFromYaml("""
+      functions:
+        - name: foo
+          overloads:
+            - id: "unique_id"
+      """)
+    with self.assertRaises(Exception) as e:
+      cel.NewEnv(
+          config=config,
+          functions=[
+              cel.FunctionDecl(
+                  "bar",
+                  [
+                      cel.Overload(
+                          "unique_id",
+                          impl=lambda: "hello",
+                      )
+                  ],
+              )
+          ],
+          function_impls={
+              "unique_id": lambda: "goodbye",
+          },
+      )
+    self.assertIn(
+        "An implementation for function overload id 'unique_id' already"
+        " exists.",
+        str(e.exception),
+    )
+
+
+class TestCelExtension(cel.CelExtension):
+  """An example CEL extension for testing."""
+
+  def __init__(self):
+    super().__init__(
+        "test_cel_extension",
+        functions=[
+            cel.FunctionDecl(
+                "hello",
+                [
+                    cel.Overload(
+                        "hello(string)",
+                        return_type=cel.Type.STRING,
+                        parameters=[
+                            cel.Type.STRING,
+                        ],
+                        impl=lambda arg: f"Hello, {arg}!",
+                    )
+                ],
+            ),
+        ],
+    )
+
 
 def normalize_yaml(yaml: str) -> str:
-  lines = yaml.split("\n")
-  indent = -1
-  unindented_lines = []
-  for line in lines:
-    pos = -1
-    for i, char in enumerate(line):
-      if char != " " and char != "\t":
-        pos = i
-        break
-    if pos == -1:
-      # Skip blank lines.
-      continue
-    if indent == -1:
-      indent = pos
-    if pos >= indent:
-      unindented_lines.append(line[indent:])
-    else:
-      unindented_lines.append(line)
-  return "\n".join(unindented_lines)
+  return textwrap.dedent(yaml).strip()
 
 
 if __name__ == "__main__":

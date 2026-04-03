@@ -13,24 +13,32 @@
 // limitations under the License.
 
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
+#include "checker/optional.h"
 #include "compiler/compiler.h"
 #include "compiler/optional.h"
 #include "runtime/optional_types.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "cel_expr_python/cel_extension.h"
-#include "google/protobuf/descriptor.h"
+#include "cel_expr_python/py_error_status.h"
 
 namespace cel_python {
 
 class ExtOptional : public CelExtension {
  public:
-  explicit ExtOptional() : CelExtension("cel.lib.optional") {}
+  explicit ExtOptional(int version) : CelExtension("optional", "", version) {
+    if (version < 0 || version > cel::kOptionalExtensionLatestVersion) {
+      throw StatusToException(absl::InvalidArgumentError(absl::StrCat(
+          "'optional' extension version: ", version, " not in range [0, ",
+          cel::kOptionalExtensionLatestVersion, "]")));
+    }
+  }
 
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override {
-    return compiler_builder.AddLibrary(cel::OptionalCompilerLibrary());
+  ExtOptional() : ExtOptional(cel::kOptionalExtensionLatestVersion) {}
+
+  cel::CompilerLibrary GetCompilerLibrary() override {
+    return cel::OptionalCompilerLibrary(version());
   }
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
@@ -43,6 +51,6 @@ class ExtOptional : public CelExtension {
   }
 };
 
-CEL_EXTENSION_MODULE(ext_optional, ExtOptional);
+CEL_VERSIONED_EXTENSION_MODULE(ext_optional, ExtOptional);
 
 }  // namespace cel_python

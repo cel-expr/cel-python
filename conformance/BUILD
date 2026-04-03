@@ -45,7 +45,7 @@ py_test(
         "//cel_expr_python/ext:ext_math",
         "//cel_expr_python/ext:ext_optional",
         "//cel_expr_python/ext:ext_proto",
-        "//cel_expr_python/ext:ext_string",
+        "//cel_expr_python/ext:ext_strings",
         "@com_google_absl_py//absl/testing:absltest",
         "//testing:proto2_test_all_types_py_pb2",
         "//testing:proto3_test_all_types_py_pb2",

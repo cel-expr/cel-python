@@ -33,7 +33,7 @@ from cel_expr_python.ext import ext_encoders
 from cel_expr_python.ext import ext_math
 from cel_expr_python.ext import ext_optional
 from cel_expr_python.ext import ext_proto
-from cel_expr_python.ext import ext_string
+from cel_expr_python.ext import ext_strings
 from cel.expr.conformance.proto2 import test_all_types_extensions_pb2 as test_all_types_extensions_proto2  # pylint: disable=unused-import
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_proto2  # pylint: disable=unused-import
 from cel.expr.conformance.proto3 import test_all_types_pb2 as test_all_types_proto3  # pylint: disable=unused-import
@@ -138,7 +138,7 @@ class ConformanceTest(absltest.TestCase):
       "math_ext": [ext_math.ExtMath()],
       "optionals": [ext_optional.ExtOptional()],
       "proto2_ext": [ext_proto.ExtProto()],
-      "string_ext": [ext_string.ExtString()],
+      "string_ext": [ext_strings.ExtStrings()],
       "type_deduction": [ext_optional.ExtOptional()],
   }
 

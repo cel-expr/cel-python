@@ -68,29 +68,31 @@ class SampleCelExtension : public cel_python::CelExtension {
   explicit SampleCelExtension()
       : cel_python::CelExtension("sample.cel.cpp.ext") {}
 
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override {
-    CEL_PYTHON_ASSIGN_OR_RETURN(
-        auto func_translate,
-        MakeFunctionDecl("translate",
-                         MakeMemberOverloadDecl("translate_inst",
+  cel::CompilerLibrary GetCompilerLibrary() override {
+    return cel::CompilerLibrary(
+        "sample.cel.cpp.ext",
+        [](cel::TypeCheckerBuilder& checker_builder) -> absl::Status {
+          CEL_PYTHON_ASSIGN_OR_RETURN(
+              auto func_translate,
+              MakeFunctionDecl("translate", MakeMemberOverloadDecl(
+                                                "translate_inst",
                                                 /*return_type=*/StringType(),
                                                 /*target=*/StringType(),
                                                 /*from_lang=*/StringType(),
                                                 /*to_lang=*/StringType())));
-    CEL_PYTHON_RETURN_IF_ERROR(
-        compiler_builder.GetCheckerBuilder().AddFunction(func_translate));
+          CEL_PYTHON_RETURN_IF_ERROR(
+              checker_builder.AddFunction(func_translate));
 
-    CEL_PYTHON_ASSIGN_OR_RETURN(
-        auto func_translate_late,
-        MakeFunctionDecl("translate_late",
-                         MakeOverloadDecl("late_bound_translation",
-                                          /*return_type=*/StringType(),
-                                          /*text=*/StringType())));
-    CEL_PYTHON_RETURN_IF_ERROR(
-        compiler_builder.GetCheckerBuilder().AddFunction(func_translate_late));
-    return absl::OkStatus();
+          CEL_PYTHON_ASSIGN_OR_RETURN(
+              auto func_translate_late,
+              MakeFunctionDecl("translate_late",
+                               MakeOverloadDecl("late_bound_translation",
+                                                /*return_type=*/StringType(),
+                                                /*text=*/StringType())));
+          CEL_PYTHON_RETURN_IF_ERROR(
+              checker_builder.AddFunction(func_translate_late));
+          return absl::OkStatus();
+        });
   }
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
