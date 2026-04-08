@@ -1,6 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
-load("@rules_python//python:defs.bzl", "py_test")
 load("@rules_python//python:py_library.bzl", "py_library")
+load("@rules_python//python:py_test.bzl", "py_test")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -8,6 +8,7 @@ pybind_extension(
     name = "sample_cel_ext_cc",
     srcs = ["sample_cel_ext.cc"],
     data = [
+        "sample_cel_ext.pyi",
         "//cel_expr_python:cel",
     ],
     deps = [
