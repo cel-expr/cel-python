@@ -108,8 +108,29 @@ PyCelEnvInternal::NewCelEnvInternal(
     CelExtensionHandle handle(ext);
     CEL_PYTHON_ASSIGN_OR_RETURN(CelExtension * extension,
                                 handle.GetExtension());
-    // TODO(b/498655870): support extension version.
-    CEL_PYTHON_RETURN_IF_ERROR(config.AddExtensionConfig(extension->name()));
+
+    std::string name;
+    if (!extension->alias().empty() &&
+        extension->alias() != extension->name()) {
+      // If the configuration lists the extension by name, use the name;
+      // otherwise, use the alias. This allows us to detect conflicting
+      // extension registrations, whether they are included by the extension
+      // name or alias.
+      name = extension->alias();
+      for (const cel::Config::ExtensionConfig& extension_config :
+           config.GetExtensionConfigs()) {
+        if (extension_config.name == extension->name()) {
+          name = extension_config.name;
+          break;
+        }
+      }
+    } else {
+      name = extension->name();
+    }
+    CEL_PYTHON_RETURN_IF_ERROR(config.AddExtensionConfig(
+        name, extension->version() >= 0
+                  ? extension->version()
+                  : cel::Config::ExtensionConfig::kLatest));
     extension_handles.push_back(std::move(handle));
   }
 

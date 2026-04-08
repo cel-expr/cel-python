@@ -49,6 +49,7 @@ pybind_extension(
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//extensions:math_ext",
         "@com_google_cel_cpp//extensions:math_ext_decls",
@@ -69,6 +70,8 @@ pybind_extension(
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_cel_cpp//checker:optional",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//compiler:optional",
         "@com_google_cel_cpp//runtime:optional_types",
@@ -94,9 +97,9 @@ pybind_extension(
 )
 
 pybind_extension(
-    name = "ext_string",
+    name = "ext_strings",
     srcs = [
-        "ext_string.cc",
+        "ext_strings.cc",
     ],
     data = [
         "//cel_expr_python:cel",
@@ -105,6 +108,7 @@ pybind_extension(
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//extensions:strings",
         "@com_google_cel_cpp//runtime:runtime_builder",

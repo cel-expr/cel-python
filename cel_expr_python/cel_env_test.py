@@ -22,7 +22,10 @@ import textwrap
 
 from absl.testing import absltest
 from cel_expr_python import cel
+from cel_expr_python.ext import ext_bindings
 from cel_expr_python.ext import ext_math
+from cel_expr_python.ext import ext_optional
+from cel_expr_python.ext import ext_strings
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 
 
@@ -95,9 +98,7 @@ class CelEnvTest(absltest.TestCase):
     )
 
   def test_config_export_container(self):
-    env = cel.NewEnv(
-        container="test.container"
-    )
+    env = cel.NewEnv(container="test.container")
     yaml = env.config().to_yaml()
     self.assertEqual(
         normalize_yaml(yaml),
@@ -251,6 +252,52 @@ class CelEnvTest(absltest.TestCase):
     self.assertEqual(res.type(), cel.Type.INT)
     self.assertEqual(res.value(), 42)
 
+  def test_config_export_extension_version(self):
+    env = cel.NewEnv(
+        extensions=[
+            ext_math.ExtMath(0),
+            ext_optional.ExtOptional(1),
+            ext_strings.ExtStrings(2),
+            ext_bindings.ExtBindings(),
+        ],
+    )
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          extensions:
+            - name: "bindings"
+            - name: "math"
+              version: 0
+            - name: "optional"
+              version: 1
+            - name: "strings"
+              version: 2
+        """),
+    )
+
+  def test_config_extension_version_out_of_range(self):
+    cases = [
+        [
+            lambda: ext_math.ExtMath(42),
+            r"'math' extension version: 42 not in range \[0, \d+\]",
+        ],
+        [
+            lambda: ext_optional.ExtOptional(6),
+            r"'optional' extension version: 6 not in range \[0, \d+\]",
+        ],
+        [
+            lambda: ext_strings.ExtStrings(18),
+            r"'strings' extension version: 18 not in range \[0, \d+\]",
+        ],
+    ]
+    for test_case in cases:
+      with self.assertRaises(Exception) as e:
+        cel.NewEnv(
+            extensions=[test_case[0]()],
+        )
+      self.assertRegex(str(e.exception), test_case[1])
+
   def test_config_extensions(self):
     config = cel.NewEnvConfigFromYaml("""
       extensions:
@@ -276,14 +323,28 @@ class CelEnvTest(absltest.TestCase):
     res = env.compile("hello('World')").eval()
     self.assertEqual(res.value(), "Hello, World!")
 
-  def test_config_extensions_override(self):
-    # TODO(b/498655870): add assertion based on extension aliases once
-    # supported.
+  def test_config_extension_override_same_version(self):
     config = cel.NewEnvConfigFromYaml("""
       extensions:
         - name: cel.lib.ext.math
+          version: 1
+        - name: strings
+          version: 2
+      """)
+    env = cel.NewEnv(
+        config=config,
+        extensions=[ext_math.ExtMath(1), ext_strings.ExtStrings(2)],
+    )
+    res = env.compile("'%.3f'.format([math.floor(3.14)])").eval()
+    self.assertEqual(res.value(), "3.000")
+
+  def test_config_extension_override_different_version(self):
+    config = cel.NewEnvConfigFromYaml("""
+      extensions:
+        - name: math
           version: 0
         - name: cel.lib.ext.strings
+          version: 2
       """)
     with self.assertRaises(Exception) as e:
       cel.NewEnv(
@@ -291,8 +352,18 @@ class CelEnvTest(absltest.TestCase):
           extensions=[ext_math.ExtMath()],
       )
     self.assertIn(
-        "Extension 'cel.lib.ext.math' version 0 is already included. Cannot"
-        " also include version 'latest'",
+        "Extension 'math' version 0 is already included. Cannot"
+        " also include version 2",
+        str(e.exception),
+    )
+    with self.assertRaises(Exception) as e:
+      cel.NewEnv(
+          config=config,
+          extensions=[ext_strings.ExtStrings(1)],
+      )
+    self.assertIn(
+        "Extension 'cel.lib.ext.strings' version 2 is already included. Cannot"
+        " also include version 1",
         str(e.exception),
     )
 

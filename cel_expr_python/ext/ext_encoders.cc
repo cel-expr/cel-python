@@ -23,7 +23,7 @@ namespace cel_python {
 
 class ExtEncoders : public CelExtension {
  public:
-  explicit ExtEncoders() : CelExtension("cel.lib.ext.encoders") {}
+  explicit ExtEncoders() : CelExtension("cel.lib.ext.encoders", "encoders") {}
 
   cel::CompilerLibrary GetCompilerLibrary() override {
     return cel::extensions::EncodersCompilerLibrary();

@@ -105,14 +105,25 @@ pybind_extension(
 # For pybind11-based CEL extensions.
 pybind_library(
     name = "cel_extension",
-    hdrs = ["cel_extension.h"],
+    srcs = [
+        "py_error_status.cc",
+    ],
+    hdrs = [
+        "cel_extension.h",
+        "py_error_status.h",
+    ],
     visibility = ["//visibility:public"],
     deps = [
+        ":status_macros",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log:absl_check",
+        "@com_google_absl//absl/log:absl_log",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_cel_cpp//compiler",
         "@com_google_cel_cpp//runtime:runtime_builder",
         "@com_google_cel_cpp//runtime:runtime_options",
-        "@com_google_protobuf//:protobuf",
     ],
 )
 
@@ -141,7 +152,10 @@ py_test(
     srcs = ["cel_env_test.py"],
     deps = [
         ":cel",
+        "//cel_expr_python/ext:ext_bindings",
         "//cel_expr_python/ext:ext_math",
+        "//cel_expr_python/ext:ext_optional",
+        "//cel_expr_python/ext:ext_strings",
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
     ],

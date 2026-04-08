@@ -20,7 +20,8 @@ namespace cel_python {
 
 class ExtBindings : public CelExtension {
  public:
-  explicit ExtBindings() : CelExtension("cel.lib.ext.cel.bindings") {}
+  explicit ExtBindings()
+      : CelExtension("cel.lib.ext.cel.bindings", "bindings") {}
 
   cel::CompilerLibrary GetCompilerLibrary() override {
     return cel::extensions::BindingsCompilerLibrary();
