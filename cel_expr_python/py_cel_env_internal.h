@@ -133,11 +133,6 @@ class PyCelEnvInternal {
   std::unique_ptr<cel::Compiler> compiler_;
   absl::flat_hash_map<RuntimeMode, std::unique_ptr<const cel::Runtime>>
       runtimes_;
-
-  // Passive parser and checker builders function as sinks to configure custom
-  // extensions, but are themselves not used to build a compiler.
-  std::unique_ptr<cel::ParserBuilder> passive_parser_builder_;
-  std::unique_ptr<cel::TypeCheckerBuilder> passive_checker_builder_;
 };
 
 }  // namespace cel_python

@@ -234,36 +234,34 @@ expr = cel_env.compile("my_func(1)")
 
 To define a custom extension in C++, define a class extending
 `cel_python::CelExtension`. There are two methods you will need to implement:
-`ConfigureCompiler` and `ConfigureRuntime`. The implementations of these methods
-use the same API as extensions written for the C++ CEL runtime. In fact,
+`GetCompilerLibrary` and `ConfigureRuntime`. The implementations of these
+methods use the same API as extensions written for the C++ CEL runtime. In fact,
 extensions written for the C++ runtime can be used unchanged with
 cel-expr-python - you would just need to write a trivial wrapper class invoking
 the registration functions defined by the C++ extension.
 
-```cpp
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const proto2::DescriptorPool& descriptor_pool);
-```
 This method adds extension function definitions to the provided
 `CompilerBuilder`, for example:
 
 ```cpp
-absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const proto2::DescriptorPool& descriptor_pool) {
-    CEL_PYTHON_ASSIGN_OR_RETURN(
-        auto func_translate,
-        cel::MakeFunctionDecl("translate",
-            cel::MakeMemberOverloadDecl("translate_inst",
-                                /*return_type=*/cel::StringType(),
-                                /*target=*/cel::StringType(),
-                                /*from_lang=*/cel::StringType(),
-                                /*to_lang=*/cel::StringType())));
-    CEL_PYTHON_RETURN_IF_ERROR(
-        compiler_builder.GetCheckerBuilder().AddFunction(func_translate));
-    return absl::OkStatus();
-}
+  cel::CompilerLibrary GetCompilerLibrary() {
+    return cel::CompilerLibrary(
+        "translate-ext",
+        [](cel::TypeCheckerBuilder& checker_builder) -> absl::Status {
+          CEL_PYTHON_ASSIGN_OR_RETURN(
+              auto func_translate,
+              cel::MakeFunctionDecl(
+                  "translate",
+                  cel::MakeMemberOverloadDecl("translate_inst",
+                                              /*return_type=*/cel::StringType(),
+                                              /*target=*/cel::StringType(),
+                                              /*from_lang=*/cel::StringType(),
+                                              /*to_lang=*/cel::StringType())));
+          CEL_PYTHON_RETURN_IF_ERROR(
+              checker_builder.AddFunction(func_translate));
+          return absl::OkStatus();
+        });
+  }
 ```
 
 The other method registers the actual implementation

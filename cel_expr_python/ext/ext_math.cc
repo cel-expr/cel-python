@@ -19,8 +19,6 @@
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "cel_expr_python/cel_extension.h"
-#include "cel_expr_python/status_macros.h"
-#include "google/protobuf/descriptor.h"
 
 namespace cel_python {
 
@@ -28,17 +26,14 @@ class ExtMath : public CelExtension {
  public:
   explicit ExtMath() : CelExtension("cel.lib.ext.math") {}
 
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override {
-    return compiler_builder.AddLibrary(cel::extensions::MathCompilerLibrary());
+  cel::CompilerLibrary GetCompilerLibrary() override {
+    return cel::extensions::MathCompilerLibrary();
   }
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
                                 const cel::RuntimeOptions& opts) override {
-    CEL_PYTHON_RETURN_IF_ERROR(cel::extensions::RegisterMathExtensionFunctions(
-        runtime_builder.function_registry(), opts));
-    return absl::OkStatus();
+    return cel::extensions::RegisterMathExtensionFunctions(
+        runtime_builder.function_registry(), opts);
   }
 };
 

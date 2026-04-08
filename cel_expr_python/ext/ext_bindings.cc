@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "absl/status/status.h"
 #include "compiler/compiler.h"
 #include "extensions/bindings_ext.h"
 #include "cel_expr_python/cel_extension.h"
-#include "google/protobuf/descriptor.h"
 
 namespace cel_python {
 
@@ -24,11 +22,8 @@ class ExtBindings : public CelExtension {
  public:
   explicit ExtBindings() : CelExtension("cel.lib.ext.cel.bindings") {}
 
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override {
-    return compiler_builder.AddLibrary(
-        cel::extensions::BindingsCompilerLibrary());
+  cel::CompilerLibrary GetCompilerLibrary() override {
+    return cel::extensions::BindingsCompilerLibrary();
   }
 };
 

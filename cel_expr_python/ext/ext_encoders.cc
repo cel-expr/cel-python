@@ -13,13 +13,11 @@
 // limitations under the License.
 
 #include "absl/status/status.h"
-#include "checker/type_checker_builder.h"
 #include "compiler/compiler.h"
 #include "extensions/encoders.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "cel_expr_python/cel_extension.h"
-#include "google/protobuf/descriptor.h"
 
 namespace cel_python {
 
@@ -27,11 +25,8 @@ class ExtEncoders : public CelExtension {
  public:
   explicit ExtEncoders() : CelExtension("cel.lib.ext.encoders") {}
 
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override {
-    return compiler_builder.GetCheckerBuilder().AddLibrary(
-        cel::extensions::EncodersCheckerLibrary());
+  cel::CompilerLibrary GetCompilerLibrary() override {
+    return cel::extensions::EncodersCompilerLibrary();
   }
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,

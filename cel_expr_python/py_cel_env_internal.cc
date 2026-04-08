@@ -25,7 +25,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "checker/type_checker_builder.h"
-#include "checker/type_checker_builder_factory.h"
 #include "common/type.h"
 #include "compiler/compiler.h"
 #include "env/config.h"
@@ -33,9 +32,6 @@
 #include "env/env_std_extensions.h"
 #include "env/runtime_std_extensions.h"
 #include "env/type_info.h"
-#include "parser/options.h"
-#include "parser/parser.h"
-#include "parser/parser_interface.h"
 #include "runtime/reference_resolver.h"
 #include "runtime/runtime.h"
 #include "runtime/runtime_builder.h"
@@ -54,86 +50,6 @@
 #include <pybind11/pybind11.h>
 
 namespace cel_python {
-
-namespace {
-
-// A temporary adapter for cel::CompilerBuilder.  It will be removed once the
-// CelExtension class is changed to return a cel::CompilerLibrary directly.
-//
-// This adapter allows `CelExtension::ConfigureCompiler`, which takes a
-// `cel::CompilerBuilder` to be used with the `cel::Env` API, which
-// is expressed in terms of the `cel::CompilerLibrary` framework.  The adapter
-// splits the `cel::CompilerLibrary` into its constituent parts and feeds them
-// to the `cel::CompilerBuilder` interface.
-class CompilerBuilderAdapter : public cel::CompilerBuilder {
- public:
-  CompilerBuilderAdapter(cel::ParserBuilder* parser_builder,
-                         cel::TypeCheckerBuilder* checker_builder)
-      : parser_builder_(parser_builder), checker_builder_(checker_builder) {}
-
-  absl::Status AddLibrary(cel::CompilerLibrary library) override {
-    if (library.configure_parser != nullptr) {
-      CEL_PYTHON_RETURN_IF_ERROR(library.configure_parser(*parser_builder_));
-    }
-    if (library.configure_checker != nullptr) {
-      CEL_PYTHON_RETURN_IF_ERROR(library.configure_checker(*checker_builder_));
-    }
-    return absl::OkStatus();
-  }
-
-  absl::Status AddLibrarySubset(cel::CompilerLibrarySubset subset) override {
-    return absl::UnimplementedError("Not implemented");
-  }
-
-  cel::ParserBuilder& GetParserBuilder() override {
-    ABSL_CHECK(parser_builder_ != nullptr);
-    return *parser_builder_;
-  }
-
-  cel::TypeCheckerBuilder& GetCheckerBuilder() override {
-    ABSL_CHECK(checker_builder_ != nullptr);
-    return *checker_builder_;
-  }
-
-  cel::Validator& GetValidator() override { return validator_; }
-
-  absl::StatusOr<std::unique_ptr<cel::Compiler>> Build() override {
-    return absl::UnimplementedError("Not implemented");
-  }
-
- private:
-  cel::ParserBuilder* parser_builder_ = nullptr;
-  cel::TypeCheckerBuilder* checker_builder_ = nullptr;
-  cel::Validator validator_;
-};
-
-// A temporary CompilerLibrary that deals with the interface mismatch between
-// CelExtension and cel::CompilerLibrary.
-cel::CompilerLibrary MakeCompilerLibrary(
-    CelExtension* extension,
-    const std::shared_ptr<google::protobuf::DescriptorPool>& descriptor_pool,
-    cel::ParserBuilder* passive_parser_builder,
-    cel::TypeCheckerBuilder* passive_checker_builder) {
-  return cel::CompilerLibrary(
-      extension->name(),
-      // Safe to capture passive_checker_builder because it outlives the
-      // compiler library.
-      [extension, descriptor_pool, passive_checker_builder](
-          cel::ParserBuilder& parser_builder) -> absl::Status {
-        CompilerBuilderAdapter compiler_builder(&parser_builder,
-                                                passive_checker_builder);
-        return extension->ConfigureCompiler(compiler_builder, *descriptor_pool);
-      },
-      // Safe to capture passive_parser_builder because it outlives the
-      // compiler library.
-      [extension, descriptor_pool, passive_parser_builder](
-          cel::TypeCheckerBuilder& checker_builder) -> absl::Status {
-        CompilerBuilderAdapter compiler_builder(passive_parser_builder,
-                                                &checker_builder);
-        return extension->ConfigureCompiler(compiler_builder, *descriptor_pool);
-      });
-}
-}  // namespace
 
 PyCelEnvInternal::PyCelEnvInternal(
     const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
@@ -156,19 +72,13 @@ PyCelEnvInternal::PyCelEnvInternal(
   cel_env_runtime_.SetConfig(env_config_.GetConfig());
   cel::RegisterStandardExtensions(cel_env_runtime_);
 
-  passive_parser_builder_ = cel::NewParserBuilder(cel::ParserOptions());
-  passive_checker_builder_ =
-      ThrowIfError(cel::CreateTypeCheckerBuilder(descriptor_pool_.get()));
   for (CelExtensionHandle& extension_handle : extensions_) {
     // This should never fail because we have already called GetExtension() once
     // before calling this constructor.
     CelExtension* extension = ThrowIfError(extension_handle.GetExtension());
     cel_env_.RegisterCompilerLibrary(
-        extension->name(), extension->name(), 0, [this, extension]() {
-          return MakeCompilerLibrary(extension, descriptor_pool_,
-                                     passive_parser_builder_.get(),
-                                     passive_checker_builder_.get());
-        });
+        extension->name(), extension->name(), 0,
+        [extension]() { return extension->GetCompilerLibrary(); });
     cel_env_runtime_.RegisterExtensionFunctions(
         extension->name(), extension->name(), 0,
         [extension](

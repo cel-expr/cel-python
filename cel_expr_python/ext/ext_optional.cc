@@ -19,7 +19,6 @@
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "cel_expr_python/cel_extension.h"
-#include "google/protobuf/descriptor.h"
 
 namespace cel_python {
 
@@ -27,10 +26,8 @@ class ExtOptional : public CelExtension {
  public:
   explicit ExtOptional() : CelExtension("optional") {}
 
-  absl::Status ConfigureCompiler(
-      cel::CompilerBuilder& compiler_builder,
-      const google::protobuf::DescriptorPool& descriptor_pool) override {
-    return compiler_builder.AddLibrary(cel::OptionalCompilerLibrary());
+  cel::CompilerLibrary GetCompilerLibrary() override {
+    return cel::OptionalCompilerLibrary();
   }
 
   absl::Status ConfigureRuntime(cel::RuntimeBuilder& runtime_builder,
