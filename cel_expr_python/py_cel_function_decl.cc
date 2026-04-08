@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "env/config.h"
 #include "cel_expr_python/py_cel_overload.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -31,6 +32,17 @@ void PyCelFunctionDecl::DefinePythonBindings(pybind11::module& m) {
       m, "FunctionDecl")
       .def(py::init<std::string, std::vector<PyCelOverload>>(), py::arg("name"),
            py::arg("overloads"));
+}
+
+cel::Config::FunctionConfig PyCelFunctionDecl::ToFunctionConfig() const {
+  cel::Config::FunctionConfig function_config;
+  function_config.name = name_;
+  function_config.overload_configs.reserve(overloads_.size());
+  for (const PyCelOverload& overload : overloads_) {
+    function_config.overload_configs.push_back(
+        overload.ToFunctionOverloadConfig());
+  }
+  return function_config;
 }
 
 }  // namespace cel_python

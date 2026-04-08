@@ -20,11 +20,14 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/log/absl_check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "checker/type_checker_builder.h"
+#include "common/function_descriptor.h"
+#include "common/kind.h"
 #include "common/type.h"
 #include "compiler/compiler.h"
 #include "env/config.h"
@@ -39,6 +42,9 @@
 #include "validator/validator.h"
 #include "cel_expr_python/cel_extension.h"
 #include "cel_expr_python/py_cel_env_config.h"
+#include "cel_expr_python/py_cel_function.h"
+#include "cel_expr_python/py_cel_function_decl.h"
+#include "cel_expr_python/py_cel_overload.h"
 #include "cel_expr_python/py_cel_python_extension.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_descriptor_database.h"
@@ -51,9 +57,17 @@
 
 namespace cel_python {
 
+namespace {
+
+static const cel::FunctionDescriptorOptions kFunctionDescriptorOptions = {
+    .is_strict = true, .is_contextual = true};
+
+}  // namespace
+
 PyCelEnvInternal::PyCelEnvInternal(
     const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
-    std::vector<CelExtensionHandle> extension_handles)
+    std::vector<CelExtensionHandle> extension_handles,
+    absl::flat_hash_map<std::string, py::object>& function_impls)
     : env_config_(env_config),
       py_descriptor_database_(py_descriptor_pool),
       descriptor_pool_(
@@ -61,7 +75,8 @@ PyCelEnvInternal::PyCelEnvInternal(
       message_factory_(descriptor_pool_.get()),
       py_message_factory_(
           std::make_shared<PyMessageFactory>(py_descriptor_pool)),
-      extensions_(std::move(extension_handles)) {
+      extensions_(std::move(extension_handles)),
+      function_impls_(std::move(function_impls)) {
   cel_env_.SetDescriptorPool(descriptor_pool_);
   cel_env_.SetConfig(env_config_.GetConfig());
   cel::RegisterStandardExtensions(cel_env_);
@@ -91,7 +106,9 @@ absl::StatusOr<std::shared_ptr<PyCelEnvInternal>>
 PyCelEnvInternal::NewCelEnvInternal(
     const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
     const std::unordered_map<std::string, PyCelType>& variable_types,
-    const std::vector<PyObject*>& extensions, const std::string& container) {
+    const std::vector<PyObject*>& extensions, const std::string& container,
+    const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
+    const std::unordered_map<std::string, py::object>& function_impls) {
   cel::Config config = env_config.GetConfig();
 
   for (const auto& [name, type] : variable_types) {
@@ -135,9 +152,35 @@ PyCelEnvInternal::NewCelEnvInternal(
   }
 
   config.SetContainerConfig(cel::Config::ContainerConfig{.name = container});
+
+  absl::flat_hash_map<std::string, py::object> impls;
+  for (const std::shared_ptr<PyCelFunctionDecl>& function : functions) {
+    CEL_PYTHON_RETURN_IF_ERROR(
+        config.AddFunctionConfig(function->ToFunctionConfig()));
+
+    for (const PyCelOverload& overload : function->overloads()) {
+      if (overload.py_function().is_none()) {
+        continue;
+      }
+      if (!impls.insert({overload.overload_id(), overload.py_function()})
+               .second) {
+        return absl::AlreadyExistsError(
+            absl::StrCat("An implementation for function overload id '",
+                         overload.overload_id(), "' already exists."));
+      }
+    }
+  }
+
+  for (const auto& [overload_id, py_function] : function_impls) {
+    if (!impls.insert({overload_id, py_function}).second) {
+      return absl::AlreadyExistsError(
+          absl::StrCat("An implementation for function overload id '",
+                       overload_id, "' already exists."));
+    }
+  }
   return std::shared_ptr<PyCelEnvInternal>(
       new PyCelEnvInternal(PyCelEnvConfig(config), py_descriptor_pool,
-                           std::move(extension_handles)));
+                           std::move(extension_handles), impls));
 }
 
 absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
@@ -197,6 +240,39 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
                               env->cel_env_runtime_.CreateRuntimeBuilder());
   CEL_PYTHON_RETURN_IF_ERROR(cel::EnableReferenceResolver(
       builder, cel::ReferenceResolverEnabled::kAlways));
+
+  for (const cel::Config::FunctionConfig& function_config :
+       env->GetEnvConfig().GetConfig().GetFunctionConfigs()) {
+    for (const cel::Config::FunctionOverloadConfig& overload_config :
+         function_config.overload_configs) {
+      auto it = env->function_impls_.find(overload_config.overload_id);
+      if (it == env->function_impls_.end()) {
+        continue;
+      }
+      py::object py_function = it->second;
+      std::vector<cel::Kind> param_kinds;
+      param_kinds.reserve(overload_config.parameters.size());
+      for (const cel::Config::TypeInfo& parameter :
+           overload_config.parameters) {
+        CEL_PYTHON_ASSIGN_OR_RETURN(
+            cel::Type type,
+            cel::TypeInfoToType(parameter, env->descriptor_pool_.get(),
+                                &env->arena_));
+        param_kinds.push_back(static_cast<cel::Kind>(type.kind()));
+      }
+      cel::FunctionDescriptor descriptor(
+          function_config.name, overload_config.is_member_function, param_kinds,
+          kFunctionDescriptorOptions);
+      CEL_PYTHON_ASSIGN_OR_RETURN(
+          cel::Type return_type,
+          cel::TypeInfoToType(overload_config.return_type,
+                              env->descriptor_pool_.get(), &env->arena_));
+      CEL_PYTHON_RETURN_IF_ERROR(builder.function_registry().Register(
+          descriptor, std::make_unique<PyCelFunctionAdapter>(
+                          function_config.name,
+                          PyCelType::FromCelType(return_type), py_function)));
+    }
+  }
   CEL_PYTHON_ASSIGN_OR_RETURN(std::unique_ptr<cel::Runtime> runtime,
                               std::move(builder).Build());
   const cel::Runtime* runtime_ptr = runtime.get();

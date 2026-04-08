@@ -28,6 +28,7 @@
 #include "cel_expr_python/py_cel_env_config.h"
 #include "cel_expr_python/py_cel_expression.h"
 #include "cel_expr_python/py_cel_function.h"
+#include "cel_expr_python/py_cel_function_decl.h"
 #include "cel_expr_python/py_cel_type.h"
 #include <pybind11/pybind11.h>
 
@@ -67,8 +68,11 @@ class PyCelEnv {
  private:
   // Private constructor. Use `py_cel.NewEnv()` in python to obtain an instance.
   PyCelEnv(const PyCelEnvConfig& config, PyObject* descriptor_pool,
-           std::unordered_map<std::string, PyCelType> variable_types,
-           const std::vector<PyObject*>& extensions, std::string container);
+           const std::unordered_map<std::string, PyCelType>& variable_types,
+           const std::vector<PyObject*>& extensions,
+           const std::string& container,
+           const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
+           const std::unordered_map<std::string, py::object>& function_impls);
 
   std::shared_ptr<PyCelEnvInternal> env_;
 };

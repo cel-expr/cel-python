@@ -188,6 +188,76 @@ Resulting message type: <class '...TestAllTypes'>
 Resulting message value: 123
 ```
 
+### Custom functions
+
+When configuring `cel.Env` you can supply custom functions. For each function
+there needs to be a declaration and an implementation. The implementation, which
+is a Python function, can be provided either as part of the declaration
+or separately.
+
+Let's say we want to be able to invoke this function from CEL expressions:
+```python
+  def good_time_of_day(ampm, arg):
+    if ampm == 'am':
+      time_of_day = 'morning'
+    else:
+      time_of_day = 'afternoon'
+    return f"Good {time_of_day}, {arg}"
+```
+
+The implementation can be supplied along with the declaration:
+```python
+  cel_env = cel.NewEnv(functions=[
+            cel.FunctionDecl(
+                "hello",
+                [
+                    cel.Overload(
+                        "hello(string,string)",
+                        return_type=cel.Type.STRING,
+                        parameters=[
+                            cel.Type.STRING,
+                            cel.Type.STRING,
+                        ],
+                        impl=good_time_of_day,
+                    )
+                ],
+            )
+        ])
+```
+
+It can also be provided separately in a dictionary that maps overload IDs to
+their respective implementations:
+
+```python
+  cel_env = cel.NewEnv(functions=[
+            cel.FunctionDecl(
+                "hello",
+                [
+                    cel.Overload(
+                        "hello(string,string)",
+                        return_type=cel.Type.STRING,
+                        parameters=[
+                            cel.Type.STRING,
+                            cel.Type.STRING,
+                        ],
+                    )
+                ],
+            )
+        ],
+        function_impls={
+            "hello(string,string)": good_time_of_day,
+        })
+```
+
+Now that the function implementation is bound to the CEL environment,
+we can invoke it from CEL like this:
+```python
+    result = env.compile("hello('am', 'breakfast is ready!')").eval()
+    print(result.value())   # Good morning, breakfast is ready!
+    result = env.compile("hello('pm', 'tea is served.')").eval()
+    print(result.value())   # Good afternoon, tea is served.
+```
+
 ### Extensions
 
 #### Standard extensions

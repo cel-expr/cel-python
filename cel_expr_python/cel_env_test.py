@@ -367,6 +367,105 @@ class CelEnvTest(absltest.TestCase):
         str(e.exception),
     )
 
+  def test_config_functions(self):
+    config = cel.NewEnvConfigFromYaml("""
+      functions:
+        - name: is_ok
+          overloads:
+            - id: "is_ok_string"
+              target:
+                type_name: string
+              return:
+                type_name: bool
+      """)
+    env = cel.NewEnv(
+        config=config,
+        functions=[
+            cel.FunctionDecl(
+                "hello",
+                [
+                    cel.Overload(
+                        "good_time_of_day",
+                        return_type=cel.Type.STRING,
+                        parameters=[
+                            cel.Type.STRING,
+                            cel.Type.STRING,
+                        ],
+                        impl=lambda ampm, arg: (
+                            "Good"
+                            f" {'morning' if ampm == 'am' else 'afternoon'},"
+                            f" {arg}!"
+                        ),
+                    )
+                ],
+            )
+        ],
+        function_impls={
+            "is_ok_string": lambda arg: arg in ["excellent", "good", "fair"],
+        },
+    )
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          functions:
+            - name: "hello"
+              overloads:
+                - id: "good_time_of_day"
+                  args:
+                    - type_name: "string"
+                    - type_name: "string"
+                  return:
+                    type_name: "string"
+            - name: "is_ok"
+              overloads:
+                - id: "is_ok_string"
+                  target:
+                    type_name: "string"
+                  return:
+                    type_name: "bool"
+        """),
+    )
+    res = env.compile("hello('am', 'Sunshine')").eval()
+    self.assertEqual(res.value(), "Good morning, Sunshine!")
+    res = env.compile("hello('pm', 'tea is served')").eval()
+    self.assertEqual(res.value(), "Good afternoon, tea is served!")
+    res = env.compile("'good'.is_ok()").eval()
+    self.assertTrue(res.value())
+    res = env.compile("'bad'.is_ok()").eval()
+    self.assertFalse(res.value())
+
+  def test_config_function_override(self):
+    config = cel.NewEnvConfigFromYaml("""
+      functions:
+        - name: foo
+          overloads:
+            - id: "unique_id"
+      """)
+    with self.assertRaises(Exception) as e:
+      cel.NewEnv(
+          config=config,
+          functions=[
+              cel.FunctionDecl(
+                  "bar",
+                  [
+                      cel.Overload(
+                          "unique_id",
+                          impl=lambda: "hello",
+                      )
+                  ],
+              )
+          ],
+          function_impls={
+              "unique_id": lambda: "goodbye",
+          },
+      )
+    self.assertIn(
+        "An implementation for function overload id 'unique_id' already"
+        " exists.",
+        str(e.exception),
+    )
+
 
 class TestCelExtension(cel.CelExtension):
   """An example CEL extension for testing."""

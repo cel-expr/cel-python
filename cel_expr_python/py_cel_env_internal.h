@@ -20,24 +20,27 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "checker/type_checker_builder.h"
+#include "common/function_descriptor.h"
 #include "compiler/compiler.h"
 #include "env/env.h"
 #include "env/env_runtime.h"
-#include "parser/parser_interface.h"
 #include "runtime/runtime.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
 #include "cel_expr_python/cel_extension.h"
 #include "cel_expr_python/py_cel_env_config.h"
+#include "cel_expr_python/py_cel_function.h"
+#include "cel_expr_python/py_cel_function_decl.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_descriptor_database.h"
 #include "cel_expr_python/py_message_factory.h"
+#include "google/protobuf/arena.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/dynamic_message.h"
 #include "google/protobuf/message.h"
@@ -73,7 +76,9 @@ class PyCelEnvInternal {
   static absl::StatusOr<std::shared_ptr<PyCelEnvInternal>> NewCelEnvInternal(
       const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
       const std::unordered_map<std::string, PyCelType>& variable_types,
-      const std::vector<PyObject*>& extensions, const std::string& container);
+      const std::vector<PyObject*>& extensions, const std::string& container,
+      const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
+      const std::unordered_map<std::string, py::object>& function_impls);
 
   const PyCelEnvConfig& GetEnvConfig() const { return env_config_; }
 
@@ -107,9 +112,10 @@ class PyCelEnvInternal {
 
  private:
   // Use NewCelEnvInternal() to create an instance.
-  PyCelEnvInternal(const PyCelEnvConfig& env_config,
-                   PyObject* py_descriptor_pool,
-                   std::vector<CelExtensionHandle> extensions);
+  PyCelEnvInternal(
+      const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
+      std::vector<CelExtensionHandle> extensions,
+      absl::flat_hash_map<std::string, py::object>& function_impls);
 
   absl::Status ConfigureStandardExtension(
       cel::CompilerBuilder& compiler_builder, const std::string& extension);
@@ -118,6 +124,7 @@ class PyCelEnvInternal {
                                           const std::string& extension,
                                           const cel::RuntimeOptions& opts);
 
+  google::protobuf::Arena arena_;
   cel::Env cel_env_;
   cel::EnvRuntime cel_env_runtime_;
   PyCelEnvConfig env_config_;
@@ -126,8 +133,9 @@ class PyCelEnvInternal {
   google::protobuf::DynamicMessageFactory message_factory_;
   std::shared_ptr<PyMessageFactory> py_message_factory_;
   // Synchronized by the GIL.
-  std::unordered_map<std::string, PyCelType> variable_types_;
+  absl::flat_hash_map<std::string, PyCelType> variable_types_;
   std::vector<CelExtensionHandle> extensions_;
+  absl::flat_hash_map<std::string, py::object> function_impls_;
   std::unique_ptr<cel::Compiler> compiler_;
   absl::flat_hash_map<RuntimeMode, std::unique_ptr<const cel::Runtime>>
       runtimes_;

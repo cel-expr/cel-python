@@ -19,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include "env/config.h"
 #include "cel_expr_python/py_cel_overload.h"
 #include <pybind11/pybind11.h>
 
@@ -34,6 +35,8 @@ class PyCelFunctionDecl {
 
   std::string name() const { return name_; }
   const std::vector<PyCelOverload>& overloads() const { return overloads_; }
+
+  cel::Config::FunctionConfig ToFunctionConfig() const;
 
  private:
   std::string name_;
