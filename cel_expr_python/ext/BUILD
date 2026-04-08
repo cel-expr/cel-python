@@ -8,7 +8,6 @@ pybind_extension(
         "ext_bindings.cc",
     ],
     data = [
-        "ext_bindings.pyi",
         "//cel_expr_python:cel",
     ],
     visibility = ["//visibility:public"],
@@ -25,7 +24,6 @@ pybind_extension(
         "ext_encoders.cc",
     ],
     data = [
-        "ext_encoders.pyi",
         "//cel_expr_python:cel",
     ],
     visibility = ["//visibility:public"],
@@ -45,7 +43,6 @@ pybind_extension(
         "ext_math.cc",
     ],
     data = [
-        "ext_math.pyi",
         "//cel_expr_python:cel",
     ],
     visibility = ["//visibility:public"],
@@ -67,7 +64,6 @@ pybind_extension(
         "ext_optional.cc",
     ],
     data = [
-        "ext_optional.pyi",
         "//cel_expr_python:cel",
     ],
     visibility = ["//visibility:public"],
@@ -90,7 +86,6 @@ pybind_extension(
         "ext_proto.cc",
     ],
     data = [
-        "ext_proto.pyi",
         "//cel_expr_python:cel",
     ],
     visibility = ["//visibility:public"],
@@ -107,7 +102,6 @@ pybind_extension(
         "ext_strings.cc",
     ],
     data = [
-        "ext_strings.pyi",
         "//cel_expr_python:cel",
     ],
     visibility = ["//visibility:public"],
