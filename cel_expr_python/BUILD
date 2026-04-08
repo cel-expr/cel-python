@@ -1,6 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_python//python:defs.bzl", "py_test")
+load("@rules_python//python:py_test.bzl", "py_test")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -45,6 +45,7 @@ pybind_extension(
         "py_message_factory.cc",
         "py_message_factory.h",
     ],
+    data = ["cel.pyi"],
     visibility = ["//visibility:public"],
     deps = [
         ":cel_extension",
