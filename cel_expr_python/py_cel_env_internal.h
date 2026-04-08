@@ -109,8 +109,7 @@ class PyCelEnvInternal {
   // Use NewCelEnvInternal() to create an instance.
   PyCelEnvInternal(const PyCelEnvConfig& env_config,
                    PyObject* py_descriptor_pool,
-                   std::vector<CelExtensionHandle> extensions,
-                   const std::string& container);
+                   std::vector<CelExtensionHandle> extensions);
 
   absl::Status ConfigureStandardExtension(
       cel::CompilerBuilder& compiler_builder, const std::string& extension);
@@ -129,7 +128,6 @@ class PyCelEnvInternal {
   // Synchronized by the GIL.
   std::unordered_map<std::string, PyCelType> variable_types_;
   std::vector<CelExtensionHandle> extensions_;
-  std::string container_;
   std::unique_ptr<cel::Compiler> compiler_;
   absl::flat_hash_map<RuntimeMode, std::unique_ptr<const cel::Runtime>>
       runtimes_;

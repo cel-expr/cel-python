@@ -53,8 +53,7 @@ namespace cel_python {
 
 PyCelEnvInternal::PyCelEnvInternal(
     const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
-    std::vector<CelExtensionHandle> extension_handles,
-    const std::string& container)
+    std::vector<CelExtensionHandle> extension_handles)
     : env_config_(env_config),
       py_descriptor_database_(py_descriptor_pool),
       descriptor_pool_(
@@ -62,8 +61,7 @@ PyCelEnvInternal::PyCelEnvInternal(
       message_factory_(descriptor_pool_.get()),
       py_message_factory_(
           std::make_shared<PyMessageFactory>(py_descriptor_pool)),
-      extensions_(std::move(extension_handles)),
-      container_(std::move(container)) {
+      extensions_(std::move(extension_handles)) {
   cel_env_.SetDescriptorPool(descriptor_pool_);
   cel_env_.SetConfig(env_config_.GetConfig());
   cel::RegisterStandardExtensions(cel_env_);
@@ -115,9 +113,10 @@ PyCelEnvInternal::NewCelEnvInternal(
     extension_handles.push_back(std::move(handle));
   }
 
+  config.SetContainerConfig(cel::Config::ContainerConfig{.name = container});
   return std::shared_ptr<PyCelEnvInternal>(
       new PyCelEnvInternal(PyCelEnvConfig(config), py_descriptor_pool,
-                           std::move(extension_handles), container));
+                           std::move(extension_handles)));
 }
 
 absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
@@ -128,15 +127,21 @@ absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
     return env->compiler_.get();
   }
 
+  const cel::Config& config = env->env_config_.GetConfig();
+
   CEL_PYTHON_ASSIGN_OR_RETURN(
       std::unique_ptr<cel::CompilerBuilder> compiler_builder,
       env->cel_env_.NewCompilerBuilder());
-  compiler_builder->GetCheckerBuilder().set_container(env->container_);
+
+  cel::TypeCheckerBuilder& checker_builder =
+      compiler_builder->GetCheckerBuilder();
+
+  checker_builder.set_container(config.GetContainerConfig().name);
 
   // Convert variable types from cel::TypeInfo to PyCelType.
-  google::protobuf::Arena* arena = compiler_builder->GetCheckerBuilder().arena();
+  google::protobuf::Arena* arena = checker_builder.arena();
   for (const cel::Config::VariableConfig& variable_config :
-       env->env_config_.GetConfig().GetVariableConfigs()) {
+       config.GetVariableConfigs()) {
     CEL_PYTHON_ASSIGN_OR_RETURN(
         cel::Type cel_type,
         cel::TypeInfoToType(variable_config.type_info,
@@ -156,7 +161,7 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
   }
 
   cel::RuntimeOptions& opts = env->cel_env_runtime_.mutable_runtime_options();
-  opts.container = env->container_;
+  opts.container = env->GetEnvConfig().GetConfig().GetContainerConfig().name;
   opts.enable_empty_wrapper_null_unboxing = true;
   opts.enable_qualified_type_identifiers = true;
   opts.enable_timestamp_duration_overflow_errors = true;

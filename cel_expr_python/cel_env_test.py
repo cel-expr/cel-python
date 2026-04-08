@@ -18,6 +18,8 @@ This module contains tests for the `cel.EnvConfig` class, focusing on its
 ability to be created from and serialized to YAML format.
 """
 
+import textwrap
+
 from absl.testing import absltest
 from cel_expr_python import cel
 from cel_expr_python.ext import ext_math
@@ -90,6 +92,18 @@ class CelEnvTest(absltest.TestCase):
         + "| invalid yaml\n"
         + "| ^",
         str(e.exception),
+    )
+
+  def test_config_export_container(self):
+    env = cel.NewEnv(
+        container="test.container"
+    )
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          container: "test.container"
+        """),
     )
 
   def test_config_export_variables(self):
@@ -308,25 +322,7 @@ class TestCelExtension(cel.CelExtension):
 
 
 def normalize_yaml(yaml: str) -> str:
-  lines = yaml.split("\n")
-  indent = -1
-  unindented_lines = []
-  for line in lines:
-    pos = -1
-    for i, char in enumerate(line):
-      if char != " " and char != "\t":
-        pos = i
-        break
-    if pos == -1:
-      # Skip blank lines.
-      continue
-    if indent == -1:
-      indent = pos
-    if pos >= indent:
-      unindented_lines.append(line[indent:])
-    else:
-      unindented_lines.append(line)
-  return "\n".join(unindented_lines)
+  return textwrap.dedent(yaml).strip()
 
 
 if __name__ == "__main__":
