@@ -25,7 +25,7 @@ namespace cel_python {
 
 class ExtOptional : public CelExtension {
  public:
-  explicit ExtOptional() : CelExtension("cel.lib.optional") {}
+  explicit ExtOptional() : CelExtension("optional") {}
 
   absl::Status ConfigureCompiler(
       cel::CompilerBuilder& compiler_builder,

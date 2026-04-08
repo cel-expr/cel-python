@@ -25,8 +25,11 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "checker/type_checker_builder.h"
 #include "compiler/compiler.h"
 #include "env/env.h"
+#include "env/env_runtime.h"
+#include "parser/parser_interface.h"
 #include "runtime/runtime.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
@@ -46,10 +49,11 @@ class PyCelEnvInternal;
 class CelExtensionHandle {
  public:
   explicit CelExtensionHandle(PyObject* extension);
+  CelExtensionHandle(const CelExtensionHandle& other) = delete;
+  CelExtensionHandle(CelExtensionHandle&& other);
   ~CelExtensionHandle();
 
-  absl::StatusOr<CelExtension*> GetExtension(
-      const std::shared_ptr<PyCelEnvInternal>& env);
+  absl::StatusOr<CelExtension*> GetExtension();
 
  private:
   // The Python object that was passed to the constructor and is retained for
@@ -105,7 +109,7 @@ class PyCelEnvInternal {
   // Use NewCelEnvInternal() to create an instance.
   PyCelEnvInternal(const PyCelEnvConfig& env_config,
                    PyObject* py_descriptor_pool,
-                   const std::vector<PyObject*>& extensions,
+                   std::vector<CelExtensionHandle> extensions,
                    const std::string& container);
 
   absl::Status ConfigureStandardExtension(
@@ -116,6 +120,7 @@ class PyCelEnvInternal {
                                           const cel::RuntimeOptions& opts);
 
   cel::Env cel_env_;
+  cel::EnvRuntime cel_env_runtime_;
   PyCelEnvConfig env_config_;
   PyDescriptorDatabase py_descriptor_database_;
   std::shared_ptr<google::protobuf::DescriptorPool> descriptor_pool_;
@@ -123,11 +128,16 @@ class PyCelEnvInternal {
   std::shared_ptr<PyMessageFactory> py_message_factory_;
   // Synchronized by the GIL.
   std::unordered_map<std::string, PyCelType> variable_types_;
-  std::vector<std::unique_ptr<CelExtensionHandle>> extensions_;
+  std::vector<CelExtensionHandle> extensions_;
   std::string container_;
   std::unique_ptr<cel::Compiler> compiler_;
   absl::flat_hash_map<RuntimeMode, std::unique_ptr<const cel::Runtime>>
       runtimes_;
+
+  // Passive parser and checker builders function as sinks to configure custom
+  // extensions, but are themselves not used to build a compiler.
+  std::unique_ptr<cel::ParserBuilder> passive_parser_builder_;
+  std::unique_ptr<cel::TypeCheckerBuilder> passive_checker_builder_;
 };
 
 }  // namespace cel_python
