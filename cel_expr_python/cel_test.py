@@ -19,6 +19,7 @@ import gc
 import importlib
 import importlib.abc
 import sys
+from typing import Any
 
 from google.protobuf import duration_pb2 as duration_pb
 from google.protobuf import timestamp_pb2 as timestamp_pb
@@ -62,7 +63,7 @@ class CelTest(absltest.TestCase):
     self.assertEqual(cel._InternalArena._get_instance_count(), 0)
     self._check_for_leaks()
 
-  def _grab_object_counts(self):
+  def _grab_object_counts(self) -> dict[str, int]:
     gc.collect()
     all_objects = gc.get_objects()
     type_counts = {}
@@ -84,28 +85,28 @@ class CelTest(absltest.TestCase):
   def _eval(
       self,
       expression: str,
-      data: dict[str, object] = None,
-      expected_return_type: cel.Type = None,
-  ):
+      data: dict[str, object] | None = None,
+      expected_return_type: cel.Type | None = None,
+  ) -> cel.Value:
     if data is None:
       data = {}
-    expr = self.env.compile(expression)
+    expr: cel.Expression = self.env.compile(expression)
     if expected_return_type is not None:
       self.assertTrue(
           expected_return_type.is_assignable_from(expr.return_type())
       )
-    act = self.env.Activation(data)
+    act: cel.Activation = self.env.Activation(data)
     return expr.eval(act)
 
   def testUnsetVar(self):
-    res = self._eval("var_bool", {})
+    res: cel.Value = self._eval("var_bool", {})
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn(
         'No value with name "var_bool" found in Activation', res.value()
     )
 
   def testEvalNull(self):
-    res = self._eval("null", expected_return_type=cel.Type.NULL)
+    res: cel.Value = self._eval("null", expected_return_type=cel.Type.NULL)
     self.assertEqual(res.type(), cel.Type.NULL)
     self.assertIsNone(res.value())
     self.assertIsNone(res.plain_value())
@@ -122,7 +123,7 @@ class CelTest(absltest.TestCase):
     self.assertTrue(res.value())
 
   def testEvalBool(self):
-    res = self._eval("true", expected_return_type=cel.Type.BOOL)
+    res: cel.Value = self._eval("true", expected_return_type=cel.Type.BOOL)
     self.assertEqual(res.type(), cel.Type.BOOL)
     self.assertEqual(res.value(), True)
     self.assertEqual(res.plain_value(), True)
@@ -140,7 +141,7 @@ class CelTest(absltest.TestCase):
     self.assertEqual(res.value(), False)
 
   def testEvalInt64(self):
-    res = self._eval("42", expected_return_type=cel.Type.INT)
+    res: cel.Value = self._eval("42", expected_return_type=cel.Type.INT)
     self.assertEqual(res.type(), cel.Type.INT)
     self.assertEqual(res.value(), 42)
     self.assertEqual(res.plain_value(), 42)
@@ -179,7 +180,7 @@ class CelTest(absltest.TestCase):
     assert "invalid int literal" in str(e.exception)
 
   def testEvalUint64(self):
-    res = self._eval("42u", expected_return_type=cel.Type.UINT)
+    res: cel.Value = self._eval("42u", expected_return_type=cel.Type.UINT)
     self.assertEqual(res.type(), cel.Type.UINT)
     self.assertEqual(res.value(), 42)
     self.assertEqual(res.plain_value(), 42)
@@ -199,7 +200,7 @@ class CelTest(absltest.TestCase):
     self.assertIn("can't convert negative value to unsigned int", res.value())
 
   def testEvalDouble(self):
-    res = self._eval("3.14", expected_return_type=cel.Type.DOUBLE)
+    res: cel.Value = self._eval("3.14", expected_return_type=cel.Type.DOUBLE)
     self.assertEqual(res.type(), cel.Type.DOUBLE)
     self.assertAlmostEqual(res.value(), 3.14, places=3)
     self.assertAlmostEqual(res.plain_value(), 3.14, places=3)
@@ -218,7 +219,7 @@ class CelTest(absltest.TestCase):
     self.assertEqual(res.value(), float("inf"))  # is infinity
 
   def testEvalString(self):
-    res = self._eval('"world"', expected_return_type=cel.Type.STRING)
+    res: cel.Value = self._eval('"world"', expected_return_type=cel.Type.STRING)
     self.assertEqual(res.type(), cel.Type.STRING)
     self.assertEqual(res.value(), "world")
     self.assertEqual(res.plain_value(), "world")
@@ -239,7 +240,7 @@ class CelTest(absltest.TestCase):
     )
 
   def testEvalBytes(self):
-    res = self._eval("b'abcd'", expected_return_type=cel.Type.BYTES)
+    res: cel.Value = self._eval("b'abcd'", expected_return_type=cel.Type.BYTES)
     self.assertEqual(res.type(), cel.Type.BYTES)
     self.assertEqual(res.value(), bytearray("abcd", "ascii"))
     self.assertEqual(res.plain_value(), bytearray("abcd", "ascii"))
@@ -257,7 +258,7 @@ class CelTest(absltest.TestCase):
     self.assertEqual(res.value(), bytearray(b"Hello! Hello!"))
 
   def testProto(self):
-    res = self._eval(
+    res: cel.Value = self._eval(
         "cel.expr.conformance.proto2.TestAllTypes{"
         "  single_string: 'hello', "
         "  single_uint64: 42u, "
@@ -323,7 +324,9 @@ class CelTest(absltest.TestCase):
     )
 
   def testEvalList(self):
-    res = self._eval("[1, 'CEL', true]", expected_return_type=cel.Type.LIST)
+    res: cel.Value = self._eval(
+        "[1, 'CEL', true]", expected_return_type=cel.Type.LIST
+    )
     self.assertEqual(res.type(), cel.Type.LIST)
     self.assertEqual([item.value() for item in res.value()], [1, "CEL", True])
     self.assertEqual(res.plain_value(), [1, "CEL", True])
@@ -372,7 +375,7 @@ class CelTest(absltest.TestCase):
     )
 
   def testEvalMap(self):
-    res = self._eval(
+    res: cel.Value = self._eval(
         "{777: 'CEL', 42: 'Python'}",
         expected_return_type=cel.Type.Map(cel.Type.INT, cel.Type.STRING),
     )
@@ -428,7 +431,7 @@ class CelTest(absltest.TestCase):
     # google.protobuf.Timestamp
     ts = timestamp_pb.Timestamp()
 
-    res = self._eval(
+    res: cel.Value = self._eval(
         "timestamp('2025-01-01T00:00:00Z')",
         expected_return_type=cel.Type.TIMESTAMP,
     )
@@ -508,7 +511,7 @@ class CelTest(absltest.TestCase):
     # google.protobuf.Duration
     dur = duration_pb.Duration()
 
-    res = self._eval(
+    res: cel.Value = self._eval(
         "duration('1m40s')", expected_return_type=cel.Type.DURATION
     )
     self.assertEqual(res.type(), cel.Type.DURATION)
@@ -579,7 +582,7 @@ class CelTest(absltest.TestCase):
     ]:
       v = item["value"]
       t = item["type"]
-      res = self._eval("var_dyn", {"var_dyn": v})
+      res: cel.Value = self._eval("var_dyn", {"var_dyn": v})
       self.assertEqual(
           res.type(),
           t,
@@ -609,7 +612,7 @@ class CelTest(absltest.TestCase):
     )
 
   def testTypeType(self):
-    res = self._eval(
+    res: cel.Value = self._eval(
         "type(1)", expected_return_type=cel.Type.Type(cel.Type.INT)
     )
     self.assertEqual(res.type(), cel.Type.TYPE)
@@ -655,8 +658,8 @@ class CelTest(absltest.TestCase):
     )  # This behavior is counterintuitive but works as implemented.
 
   def testCelExpressionPersistence_checkedExpr(self):
-    expr = self.env.compile("var_msg.single_string")
-    as_bytes = expr.serialize()
+    expr: cel.Expression = self.env.compile("var_msg.single_string")
+    as_bytes: bytes = expr.serialize()
 
     expr = self.env.deserialize(as_bytes)
 
@@ -666,8 +669,8 @@ class CelTest(absltest.TestCase):
     self.assertEqual(res.value(), "Hey!")
 
   def testCelExpressionPersistence_uncheckedExpr(self):
-    expr = self.env.compile("runtimely + 2", disable_check=True)
-    as_bytes = expr.serialize()
+    expr: cel.Expression = self.env.compile("runtimely + 2", disable_check=True)
+    as_bytes: bytes = expr.serialize()
 
     expr = self.env.deserialize(as_bytes)
 
@@ -685,8 +688,8 @@ class CelTest(absltest.TestCase):
     self.assertIn("undeclared reference to 'runtimely'", str(e.exception))
 
   def testUncheckedCelExpression(self):
-    expr = self.env.compile("runtimely + 2", disable_check=True)
-    res = expr.eval(self.env.Activation({"runtimely": 40}))
+    expr: cel.Expression = self.env.compile("runtimely + 2", disable_check=True)
+    res: cel.Value = expr.eval(self.env.Activation({"runtimely": 40}))
     self.assertEqual(res.value(), 42)
 
   def testActivationWithArena(self):
@@ -722,12 +725,12 @@ class CelTest(absltest.TestCase):
     self.assertEqual(cel._InternalArena._get_instance_count(), 0)
 
   def testImplicitActivation(self):
-    expr = self.env.compile("'Hello, ' + var_str")
-    res = expr.eval(data={"var_str": "World!"})
+    expr: cel.Expression = self.env.compile("'Hello, ' + var_str")
+    res: cel.Value = expr.eval(data={"var_str": "World!"})
     self.assertEqual(res.value(), "Hello, World!")
 
   def testActivationAndOtherArgs(self):
-    expr = self.env.compile("'Hello, ' + var_str")
+    expr: cel.Expression = self.env.compile("'Hello, ' + var_str")
     with self.assertRaises(Exception) as e:
       expr.eval(
           self.env.Activation(data={"var_str": "World!"}),
@@ -783,7 +786,7 @@ class CompatibleNumber:
 
   # Defining __index__ makes this a number type from Python's perspective
   # and also a valid integer for CEL.
-  def __index__(self):
+  def __index__(self) -> int:
     return int(self.value)
 
 
@@ -794,7 +797,7 @@ class IncompatibleNumber:
 
   # Defining __int__ makes this a number type from Python's perspective,
   # but without at least __index__, it won't be a valid integer for CEL.
-  def __int__(self):
+  def __int__(self) -> int:
     return len(self.value)
 
 
@@ -833,7 +836,7 @@ class CelWithoutProtoSupportTest(absltest.TestCase):
     super().tearDown()
 
   def testEvalWithNonProtoTypes(self):
-    cel_env = cel.NewEnv(
+    cel_env: cel.Env = cel.NewEnv(
         descriptor_pool=None,
         variables={
             "var_str": cel.Type.STRING,
@@ -841,12 +844,12 @@ class CelWithoutProtoSupportTest(absltest.TestCase):
             "var_list": cel.Type.List(cel.Type.STRING),
         },
     )
-    data = {
+    data: dict[str, Any] = {
         "var_str": "foo",
         "var_map": {"key": "bar"},
         "var_list": ["foo", "bar", "baz"],
     }
-    res = cel_env.compile("var_str").eval(data=data)
+    res: cel.Value = cel_env.compile("var_str").eval(data=data)
     self.assertEqual(res.value(), "foo")
 
     res = cel_env.compile("var_map['key']").eval(data=data)
@@ -856,13 +859,13 @@ class CelWithoutProtoSupportTest(absltest.TestCase):
     self.assertEqual(res.value(), "baz")
 
   def testErrorOnProtoAccess(self):
-    cel_env = cel.NewEnv(
+    cel_env: cel.Env = cel.NewEnv(
         descriptor_pool=None,
         variables={
             "var_proto": cel.Type.DYN,
         },
     )
-    res = cel_env.compile("var_proto.single_string").eval(
+    res: cel.Value = cel_env.compile("var_proto.single_string").eval(
         data={"var_proto": self.msg}
     )
     self.assertEqual(res.type(), cel.Type.ERROR)
@@ -882,14 +885,14 @@ class CelWithoutProtoSupportTest(absltest.TestCase):
     )
 
   def testErrorOnProtoCreation(self):
-    cel_env = cel.NewEnv(
+    cel_env: cel.Env = cel.NewEnv(
         descriptor_pool=None,
         variables={
             "var_proto": cel.Type.DYN,
         },
     )
     # Disable type checking to allow the compilation to succeed.
-    expr = cel_env.compile(
+    expr: cel.Expression = cel_env.compile(
         "cel.expr.conformance.proto2.TestAllTypes{single_string: 'hello'}",
         disable_check=True,
     )
