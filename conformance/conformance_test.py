@@ -17,6 +17,7 @@
 import datetime
 import os
 import re
+from typing import Any
 import unittest
 
 from google.protobuf import descriptor_pool
@@ -143,6 +144,8 @@ class ConformanceTest(absltest.TestCase):
   }
 
   def __init__(self, test_name: str, simple_test: simple_pb.SimpleTest):
+    self.descriptor_pool = descriptor_pool.Default()
+
     def _function():
       self._run_conformance_test(simple_test)
 
@@ -150,21 +153,20 @@ class ConformanceTest(absltest.TestCase):
     super().__init__(test_name)
 
   def _run_conformance_test(self, simple_test: simple_pb.SimpleTest):
-    decls = {}
-    values = {}
+    decls: dict[str, cel.Type] = {}
+    values: dict[str, Any] = {}
     for decl in simple_test.type_env:
       if decl.ident.HasField("type"):
         decls[decl.name] = self._convert_type(decl.ident.type)
       else:
         self.fail("Unsupported declaration type: " + str(decl))
 
-    extensions = []
+    extensions: list[cel.CelExtensionBase] = []
     for key, value in self.EXTENSIONS_PER_TESTFILE.items():
       if self._testMethodName.find(key) != -1:
         extensions = value
         break
 
-    self.descriptor_pool = descriptor_pool.Default()
     self.env = cel.NewEnv(
         self.descriptor_pool,
         variables=decls,
@@ -172,7 +174,7 @@ class ConformanceTest(absltest.TestCase):
         container=simple_test.container,
     )
     try:
-      compiled_expr = self.env.compile(
+      compiled_expr: cel.Expression = self.env.compile(
           simple_test.expr, disable_check=simple_test.disable_check
       )
     except Exception as e:  # pylint: disable=broad-except
@@ -195,9 +197,9 @@ class ConformanceTest(absltest.TestCase):
     for key, value in simple_test.bindings.items():
       values[key] = self._convert_value(value.value)
 
-    act = self.env.Activation(values)
+    act: cel.Activation = self.env.Activation(values)
     try:
-      res = compiled_expr.eval(act)
+      res: cel.Value = compiled_expr.eval(act)
     except Exception as e:  # pylint: disable=broad-except
       if simple_test.HasField("eval_error"):
         # Error messages in C++ are not the same as those in the conformance
@@ -207,7 +209,9 @@ class ConformanceTest(absltest.TestCase):
         raise e
     self.assertEvalResult(res, simple_test)
 
-  def assertEvalResult(self, result, simple_test: simple_pb.SimpleTest):
+  def assertEvalResult(
+      self, result: cel.Value, simple_test: simple_pb.SimpleTest
+  ):
     if simple_test.HasField("value"):
       self.assertValue(result, simple_test.value)
     elif simple_test.HasField("eval_error"):
@@ -225,7 +229,9 @@ class ConformanceTest(absltest.TestCase):
     else:
       self.assertEqual(result.value(), True)
 
-  def _convert_primitive_type(self, primitive: checked_pb.Type.PrimitiveType):
+  def _convert_primitive_type(
+      self, primitive: checked_pb.Type.PrimitiveType
+  ) -> cel.Type:
     if primitive == checked_pb.Type.PrimitiveType.BOOL:
       return cel.Type.BOOL
     elif primitive == checked_pb.Type.PrimitiveType.INT64:
@@ -241,8 +247,8 @@ class ConformanceTest(absltest.TestCase):
     else:
       self.fail("Unsupported primitive type: " + str(primitive))
 
-  def _convert_type(self, tp: checked_pb.Type):
-    kind = tp.WhichOneof("type_kind")
+  def _convert_type(self, tp: checked_pb.Type) -> cel.Type:
+    kind: str | None = tp.WhichOneof("type_kind")
     if kind == "dyn":
       return cel.Type.DYN
     elif kind == "null":
@@ -271,7 +277,7 @@ class ConformanceTest(absltest.TestCase):
     else:
       self.fail("Unsupported type: " + str(type))
 
-  def _convert_value(self, value: value_pb.Value):
+  def _convert_value(self, value: value_pb.Value) -> Any:
     if value.HasField("null_value"):
       return None
     elif value.HasField("bool_value"):
@@ -305,7 +311,7 @@ class ConformanceTest(absltest.TestCase):
     else:
       self.fail("Unsupported value type: " + str(value))
 
-  def _type_by_name(self, type_name: str):
+  def _type_by_name(self, type_name: str) -> cel.Type:
     if type_name == "dyn":
       return cel.Type.DYN
     elif type_name == "null_type":

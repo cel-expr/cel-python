@@ -19,6 +19,7 @@ ability to be created from and serialized to YAML format.
 """
 
 import textwrap
+from typing import Any
 
 from absl.testing import absltest
 from cel_expr_python import cel
@@ -32,7 +33,7 @@ from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 class CelEnvTest(absltest.TestCase):
 
   def test_env_config_from_and_to_yaml(self):
-    config = cel.NewEnvConfigFromYaml("""
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       name: foo
       container: test.container
       stdlib:
@@ -57,7 +58,7 @@ class CelEnvTest(absltest.TestCase):
               return:
                 type_name: int
     """)
-    yaml = config.to_yaml()
+    yaml: str = config.to_yaml()
     self.assertEqual(
         normalize_yaml(yaml),
         normalize_yaml("""
@@ -98,8 +99,8 @@ class CelEnvTest(absltest.TestCase):
     )
 
   def test_config_export_container(self):
-    env = cel.NewEnv(container="test.container")
-    yaml = env.config().to_yaml()
+    env: cel.Env = cel.NewEnv(container="test.container")
+    yaml: str = env.config().to_yaml()
     self.assertEqual(
         normalize_yaml(yaml),
         normalize_yaml("""
@@ -108,7 +109,7 @@ class CelEnvTest(absltest.TestCase):
     )
 
   def test_config_export_variables(self):
-    config = cel.NewEnv(
+    config: cel.Env = cel.NewEnv(
         variables={
             "var_bool": cel.Type.BOOL,
             "var_int": cel.Type.INT,
@@ -127,7 +128,7 @@ class CelEnvTest(absltest.TestCase):
             "var_dyn": cel.Type.DYN,
         }
     )
-    yaml = config.config().to_yaml()
+    yaml: str = config.config().to_yaml()
     self.assertEqual(
         normalize_yaml(yaml),
         normalize_yaml("""
@@ -184,13 +185,13 @@ class CelEnvTest(absltest.TestCase):
         - name: "var_bool"
           type_name: "bool"
       """)
-    env = cel.NewEnv(
+    env: cel.Env = cel.NewEnv(
         config=config,
         variables={
             "var_msg": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
         },
     )
-    yaml = env.config().to_yaml()
+    yaml: str = env.config().to_yaml()
     self.assertEqual(
         normalize_yaml(yaml),
         normalize_yaml("""
@@ -203,7 +204,7 @@ class CelEnvTest(absltest.TestCase):
     )
 
   def test_config_variable_override(self):
-    config = cel.NewEnvConfigFromYaml("""
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       variables:
         - name: "var_bool"
           type_name: "bool"
@@ -222,7 +223,7 @@ class CelEnvTest(absltest.TestCase):
     )
 
   def test_config_variable_types(self):
-    config = cel.NewEnvConfigFromYaml("""
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       variables:
         - name: "var_bool"
           type_name: "bool"
@@ -230,17 +231,17 @@ class CelEnvTest(absltest.TestCase):
           type_name: "int"
           value: 42
       """)
-    env = cel.NewEnv(
+    env: cel.Env = cel.NewEnv(
         config=config,
         variables={
             "var_msg": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
         },
     )
-    data = {
+    data: dict[str, Any] = {
         "var_bool": True,
         "var_msg": test_all_types_pb.TestAllTypes(single_string="hello"),
     }
-    res = env.compile("var_bool").eval(data=data)
+    res: cel.Value = env.compile("var_bool").eval(data=data)
     self.assertEqual(res.type(), cel.Type.BOOL)
     self.assertTrue(res.value())
 
@@ -253,7 +254,7 @@ class CelEnvTest(absltest.TestCase):
     self.assertEqual(res.value(), 42)
 
   def test_config_export_extension_version(self):
-    env = cel.NewEnv(
+    env: cel.Env = cel.NewEnv(
         extensions=[
             ext_math.ExtMath(0),
             ext_optional.ExtOptional(1),
@@ -261,7 +262,7 @@ class CelEnvTest(absltest.TestCase):
             ext_bindings.ExtBindings(),
         ],
     )
-    yaml = env.config().to_yaml()
+    yaml: str = env.config().to_yaml()
     self.assertEqual(
         normalize_yaml(yaml),
         normalize_yaml("""
@@ -299,16 +300,16 @@ class CelEnvTest(absltest.TestCase):
       self.assertRegex(str(e.exception), test_case[1])
 
   def test_config_extensions(self):
-    config = cel.NewEnvConfigFromYaml("""
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       extensions:
         - name: math
         - name: strings
       """)
-    env = cel.NewEnv(
+    env: cel.Env = cel.NewEnv(
         config=config,
         extensions=[TestCelExtension()],
     )
-    yaml = env.config().to_yaml()
+    yaml: str = env.config().to_yaml()
     self.assertEqual(
         normalize_yaml(yaml),
         normalize_yaml("""
@@ -318,20 +319,20 @@ class CelEnvTest(absltest.TestCase):
             - name: "test_cel_extension"
         """),
     )
-    res = env.compile("'%.4f'.format([math.sqrt(2)])").eval()
+    res: cel.Value = env.compile("'%.4f'.format([math.sqrt(2)])").eval()
     self.assertEqual(res.value(), "1.4142")
     res = env.compile("hello('World')").eval()
     self.assertEqual(res.value(), "Hello, World!")
 
   def test_config_extension_override_same_version(self):
-    config = cel.NewEnvConfigFromYaml("""
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       extensions:
         - name: cel.lib.ext.math
           version: 1
         - name: strings
           version: 2
       """)
-    env = cel.NewEnv(
+    env: cel.Env = cel.NewEnv(
         config=config,
         extensions=[ext_math.ExtMath(1), ext_strings.ExtStrings(2)],
     )
@@ -368,7 +369,7 @@ class CelEnvTest(absltest.TestCase):
     )
 
   def test_config_functions(self):
-    config = cel.NewEnvConfigFromYaml("""
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       functions:
         - name: is_ok
           overloads:
@@ -378,7 +379,7 @@ class CelEnvTest(absltest.TestCase):
               return:
                 type_name: bool
       """)
-    env = cel.NewEnv(
+    env: cel.Env = cel.NewEnv(
         config=config,
         functions=[
             cel.FunctionDecl(
@@ -426,7 +427,7 @@ class CelEnvTest(absltest.TestCase):
                     type_name: "bool"
         """),
     )
-    res = env.compile("hello('am', 'Sunshine')").eval()
+    res: cel.Value = env.compile("hello('am', 'Sunshine')").eval()
     self.assertEqual(res.value(), "Good morning, Sunshine!")
     res = env.compile("hello('pm', 'tea is served')").eval()
     self.assertEqual(res.value(), "Good afternoon, tea is served!")
@@ -436,7 +437,7 @@ class CelEnvTest(absltest.TestCase):
     self.assertFalse(res.value())
 
   def test_config_function_override(self):
-    config = cel.NewEnvConfigFromYaml("""
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       functions:
         - name: foo
           overloads:

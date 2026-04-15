@@ -14,6 +14,8 @@
 
 """Test for CEL extensions."""
 
+from typing import Any
+
 from google.protobuf import descriptor_pool
 
 from absl.testing import absltest
@@ -32,11 +34,13 @@ class CustomExtTest(parameterized.TestCase):
       ("cc_ext", sample_cel_ext_cc.SampleCelExtension()),
   ]
 
-  def _compile_expr(
-      self, ext: cel.CelExtension, expression: str
-  ) -> cel.Expression:
-    """Creates a CEL expression for the given extension and compiles the expression."""
+  def setUp(self):
+    super().setUp()
     self.descriptor_pool = descriptor_pool.Default()
+    self.env = cel.NewEnv(self.descriptor_pool)
+
+  def _compile_expr(self, ext: Any, expression: str) -> cel.Expression:
+    """Creates a CEL expression for the given extension and compiles the expression."""
     self.env = cel.NewEnv(
         self.descriptor_pool,
         variables={},
@@ -61,29 +65,35 @@ class CustomExtTest(parameterized.TestCase):
 
   @parameterized.named_parameters(EXT_IMPLEMENTATIONS)
   def test_basic_function(self, ext):
-    compiled_expr = self._compile_expr(
+    compiled_expr: cel.Expression = self._compile_expr(
         ext, "'Hello, world!'.translate('en', 'es')"
     )
-    act = self.env.Activation({})
-    res = compiled_expr.eval(act)
+    act: cel.Activation = self.env.Activation({})
+    res: cel.Value = compiled_expr.eval(act)
 
     self.assertEqual(res.value(), "¡Hola Mundo!")
 
   @parameterized.named_parameters(EXT_IMPLEMENTATIONS)
   def test_late_bound_function(self, ext):
-    compiled_expr = self._compile_expr(ext, "translate_late('Hello, world!')")
+    compiled_expr: cel.Expression = self._compile_expr(
+        ext, "translate_late('Hello, world!')"
+    )
 
     # Demonstrate value capture by late-binding a function.
-    world = "Mundo"
-    act = self._create_activation(lambda _: "¡Hola {}!".format(world))
-    res = compiled_expr.eval(act)
+    world: str = "Mundo"
+    act: cel.Activation = self._create_activation(
+        lambda _: "¡Hola {}!".format(world)
+    )
+    res: cel.Value = compiled_expr.eval(act)
 
     self.assertEqual(res.value(), "¡Hola Mundo!")
 
   @parameterized.named_parameters(EXT_IMPLEMENTATIONS)
   def test_error_no_matching_overload(self, ext):
-    compiled_expr = self._compile_expr(ext, "translate_late('Hello, world!')")
-    act = self.env.Activation(
+    compiled_expr: cel.Expression = self._compile_expr(
+        ext, "translate_late('Hello, world!')"
+    )
+    act: cel.Activation = self.env.Activation(
         {},
         functions=[
             cel.Function(
@@ -95,7 +105,7 @@ class CustomExtTest(parameterized.TestCase):
             )
         ],
     )
-    res = compiled_expr.eval(act)
+    res: cel.Value = compiled_expr.eval(act)
 
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn(
@@ -105,9 +115,13 @@ class CustomExtTest(parameterized.TestCase):
 
   @parameterized.named_parameters(EXT_IMPLEMENTATIONS)
   def test_error_wrong_arg_number(self, ext):
-    compiled_expr = self._compile_expr(ext, "translate_late('Hello, world!')")
-    act = self._create_activation(_lost_in_translation_wrong_arg_number)
-    res = compiled_expr.eval(act)
+    compiled_expr: cel.Expression = self._compile_expr(
+        ext, "translate_late('Hello, world!')"
+    )
+    act: cel.Activation = self._create_activation(
+        _lost_in_translation_wrong_arg_number
+    )
+    res: cel.Value = compiled_expr.eval(act)
 
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn(
@@ -118,9 +132,13 @@ class CustomExtTest(parameterized.TestCase):
 
   @parameterized.named_parameters(EXT_IMPLEMENTATIONS)
   def test_error_wrong_return_type(self, ext):
-    compiled_expr = self._compile_expr(ext, "translate_late('Hello, world!')")
-    act = self._create_activation(_lost_in_translation_wrong_return_type)
-    res = compiled_expr.eval(act)
+    compiled_expr: cel.Expression = self._compile_expr(
+        ext, "translate_late('Hello, world!')"
+    )
+    act: cel.Activation = self._create_activation(
+        _lost_in_translation_wrong_return_type
+    )
+    res: cel.Value = compiled_expr.eval(act)
 
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertRegex(
@@ -131,11 +149,15 @@ class CustomExtTest(parameterized.TestCase):
 
   @parameterized.named_parameters(EXT_IMPLEMENTATIONS)
   def test_error_return_none(self, ext):
-    compiled_expr = self._compile_expr(ext, "translate_late('Hello, world!')")
+    compiled_expr: cel.Expression = self._compile_expr(
+        ext, "translate_late('Hello, world!')"
+    )
 
-    act = self._create_activation(_lost_in_translation_return_none)
+    act: cel.Activation = self._create_activation(
+        _lost_in_translation_return_none
+    )
 
-    res = compiled_expr.eval(act)
+    res: cel.Value = compiled_expr.eval(act)
 
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertRegex(
@@ -146,11 +168,15 @@ class CustomExtTest(parameterized.TestCase):
 
   @parameterized.named_parameters(EXT_IMPLEMENTATIONS)
   def test_error_propagation(self, ext):
-    compiled_expr = self._compile_expr(ext, "translate_late('Hello, world!')")
+    compiled_expr: cel.Expression = self._compile_expr(
+        ext, "translate_late('Hello, world!')"
+    )
 
-    act = self._create_activation(_lost_in_translation_raising_error)
+    act: cel.Activation = self._create_activation(
+        _lost_in_translation_raising_error
+    )
 
-    res = compiled_expr.eval(act)
+    res: cel.Value = compiled_expr.eval(act)
 
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn("NOT_FOUND: Lost in translation", res.value())
@@ -179,7 +205,7 @@ def _lost_in_translation_wrong_return_type(arg1: str) -> int:
   return len(arg1)
 
 
-def _lost_in_translation_return_none(arg1: str) -> str:  # pylint: disable=unused-argument
+def _lost_in_translation_return_none(arg1: str) -> str | None:  # pylint: disable=unused-argument
   return None
 
 
@@ -208,15 +234,15 @@ class PythonTypeMappingsTest(parameterized.TestCase):
 
   @parameterized.named_parameters(TEST_EXPRESSIONS)
   def test_expression(self, expr):
-    compiled_expr = self.env.compile(expr)
-    act = self.env.Activation()
-    res = compiled_expr.eval(act)
+    compiled_expr: cel.Expression = self.env.compile(expr)
+    act: cel.Activation = self.env.Activation()
+    res: cel.Value = compiled_expr.eval(act)
     self.assertEqual(res.value(), True)
 
   def test_lerp_error_out_of_bounds(self):
-    compiled_expr = self.env.compile("lerp(1, 2, 1.5)")
-    act = self.env.Activation()
-    res = compiled_expr.eval(act)
+    compiled_expr: cel.Expression = self.env.compile("lerp(1, 2, 1.5)")
+    act: cel.Activation = self.env.Activation()
+    res: cel.Value = compiled_expr.eval(act)
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn("t must be between 0.0 and 1.0", res.value())
 
@@ -224,7 +250,7 @@ class PythonTypeMappingsTest(parameterized.TestCase):
 class OverloadExistingFunctionTest(absltest.TestCase):
 
   def test_overload_existing_function(self):
-    env = cel.NewEnv(
+    env: cel.Env = cel.NewEnv(
         variables={"var_map": cel.Type.Map(cel.Type.STRING, cel.Type.DYN)},
         extensions=[
             cel.CelExtension(
@@ -250,15 +276,15 @@ class OverloadExistingFunctionTest(absltest.TestCase):
             )
         ],
     )
-    expr = env.compile("var_map.contains('foo', 'bar')")
+    expr: cel.Expression = env.compile("var_map.contains('foo', 'bar')")
 
-    res = expr.eval(data={"var_map": {"foo": "bar"}})
+    res: cel.Value = expr.eval(data={"var_map": {"foo": "bar"}})
     self.assertTrue(res.value())
     res = expr.eval(data={"var_map": {"foo": "baz"}})
     self.assertFalse(res.value())
 
 
-def contains_key_value(cel_map, key, value):
+def contains_key_value(cel_map: dict[str, Any], key: str, value: Any) -> bool:
   return key in cel_map and cel_map[key] == value
 
 
