@@ -46,7 +46,9 @@ pybind_extension(
         "py_message_factory.h",
     ],
     data = ["cel.pyi"],
-    visibility = ["//visibility:public"],
+    visibility = [
+        "//visibility:public",
+    ],
     deps = [
         ":cel_extension",
         ":status_macros",
