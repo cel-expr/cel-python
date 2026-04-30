@@ -35,10 +35,7 @@ _ALL_TESTS = [
 py_test(
     name = "conformance_test",
     srcs = ["conformance_test.py"],
-    data = _ALL_TESTS,
-    deps = [
-        "@com_google_cel_spec//proto/cel/expr:checked_py_pb2",
-        "@com_google_cel_spec//proto/cel/expr:value_py_pb2",
+    data = _ALL_TESTS + [
         "//cel_expr_python:cel",
         "//cel_expr_python/ext:ext_bindings",
         "//cel_expr_python/ext:ext_encoders",
@@ -46,7 +43,21 @@ py_test(
         "//cel_expr_python/ext:ext_optional",
         "//cel_expr_python/ext:ext_proto",
         "//cel_expr_python/ext:ext_strings",
+    ],
+    env = {
+        "TEST_FILES": ",".join(["$(rlocationpath %s)" % t for t in _ALL_TESTS]),
+    },
+    deps = [
+        "@com_google_cel_spec//proto/cel/expr:checked_py_pb2",
+        "@com_google_cel_spec//proto/cel/expr:value_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+        "//cel_expr_python/ext:ext_bindings",
+        "//cel_expr_python/ext:ext_encoders",
+        "//cel_expr_python/ext:ext_math",
+        "//cel_expr_python/ext:ext_optional",
+        "//cel_expr_python/ext:ext_proto",
+        "//cel_expr_python/ext:ext_strings",
+        "//cel_expr_python:cel",
         "//testing:proto2_test_all_types_py_pb2",
         "//testing:proto3_test_all_types_py_pb2",
         "//testing:simple_py_pb2",

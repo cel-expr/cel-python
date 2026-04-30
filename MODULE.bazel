@@ -21,6 +21,10 @@ _CEL_CPP_SHA256 = "d1b9b2c2e9745826c1c8540a49f972ea4b93dffd5878c6a67756a2627b011
 
 archive_override(
     module_name = "cel-cpp",
+    patch_cmds = [
+        # ABSL_CONST_INIT is incompatible with MSVC-CL with the /std:c++20 option
+        "sed -i 's/ABSL_CONST_INIT //g' common/values/optional_value.cc",
+    ],
     sha256 = _CEL_CPP_SHA256,
     strip_prefix = "cel-cpp-" + _CEL_CPP_COMMIT,
     url = "https://github.com/google/cel-cpp/archive/" + _CEL_CPP_COMMIT + ".tar.gz",
@@ -52,6 +56,15 @@ bazel_dep(name = "rules_proto", version = "7.1.0")
 
 # https://registry.bazel.build/modules/rules_python
 bazel_dep(name = "rules_python", version = "1.7.0")
+
+# On Windows the file system is case-insensitive, which creates a collision between
+# antlr4-cpp-runtime/VERSION and the system `#include <version>`
+single_version_override(
+    module_name = "antlr4-cpp-runtime",
+    patch_cmds = [
+        "mv VERSION VERSION.txt",
+    ],
+)
 
 python_rules = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python_rules.toolchain(

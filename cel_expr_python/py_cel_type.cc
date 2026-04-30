@@ -404,7 +404,7 @@ absl::StatusOr<PyCelType> PyCelType::ForPyObject(
 
   if (PyNumber_Check(py_object)) {
     // Attempt to convert to a signed 64-bit integer.
-    PyLong_AsLong(py_object);
+    PyLong_AsLongLong(py_object);
     if (!PyErr_Occurred()) {
       return PyCelType::Int();
     }
@@ -412,7 +412,7 @@ absl::StatusOr<PyCelType> PyCelType::ForPyObject(
 
     // If the value is too large for a signed 64-bit integer, try converting
     // to an unsigned 64-bit integer. If successful, return a UINT type.
-    PyLong_AsUnsignedLong(py_object);
+    PyLong_AsUnsignedLongLong(py_object);
     if (!PyErr_Occurred()) {
       return PyCelType::Uint();
     }

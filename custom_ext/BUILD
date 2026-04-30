@@ -33,14 +33,19 @@ pybind_extension(
 py_library(
     name = "sample_cel_ext_py",
     srcs = ["sample_cel_ext.py"],
-    deps = [
+    data = [
         "//cel_expr_python:cel",
     ],
+    deps = ["//cel_expr_python:cel"],
 )
 
 py_test(
     name = "custom_ext_test",
     srcs = ["custom_ext_test.py"],
+    data = [
+        ":sample_cel_ext_cc",
+        "//cel_expr_python:cel",
+    ],
     deps = [
         ":sample_cel_ext_cc",
         ":sample_cel_ext_py",

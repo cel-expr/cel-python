@@ -160,7 +160,10 @@ class CelTest(absltest.TestCase):
     self.assertEqual(res.value(), 42)
     res = self._eval("var_int", {"var_int": 1000000000000000000000000})
     self.assertEqual(res.type(), cel.Type.ERROR)
-    self.assertIn("int too large", res.value())
+    self.assertTrue(
+        "int too large" in res.value() or "int too big" in res.value(),
+        msg=f"Unexpected error message: {res.value()}",
+    )
     res = self._eval("var_int - 2", {"var_int": 3.14})
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn(
@@ -197,7 +200,11 @@ class CelTest(absltest.TestCase):
     self.assertEqual(res.value(), 43)
     res = self._eval("var_uint + 1u", {"var_uint": -42})
     self.assertEqual(res.type(), cel.Type.ERROR)
-    self.assertIn("can't convert negative value to unsigned int", res.value())
+    self.assertTrue(
+        "can't convert negative value to unsigned int" in res.value()
+        or "can't convert negative int to unsigned" in res.value(),
+        msg=f"Unexpected error message: {res.value()}",
+    )
 
   def testEvalDouble(self):
     res: cel.Value = self._eval("3.14", expected_return_type=cel.Type.DOUBLE)

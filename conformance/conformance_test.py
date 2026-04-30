@@ -73,6 +73,8 @@ class ConformanceTestSuite(unittest.TestSuite):
       "optionals/optionals/optional_struct_optindex_index_value",
       "optionals/optionals/optional_struct_optindex_value",
       "optionals/optionals/struct_optindex_value",
+      # TODO(b/507568865): Timezone support on Windows.
+      "timestamps/timestamp_selectors_tz/.*",
   ]
 
   def __init__(self):
@@ -96,9 +98,7 @@ class ConformanceTestSuite(unittest.TestSuite):
     This function names tests as "file_name/section_name/test_name", and adds
     them to the test suite.
     """
-    testfiles = self._all_test_files(
-        "cel-spec+/tests/simple/testdata"
-    )
+    testfiles = self._all_test_files()
 
     for testfile in testfiles:
       with open(testfile, "rb", encoding=None, errors=None) as data_file:
@@ -117,17 +117,18 @@ class ConformanceTestSuite(unittest.TestSuite):
           if not should_skip:
             self.addTest(ConformanceTest(test_name, test))
 
-  def _all_test_files(self, path: str) -> list[str]:
+  def _all_test_files(self) -> list[str]:
     r = runfiles.Create()
-    location = r.Rlocation(path)
-    if not location:
-      raise ValueError("Could not resolve path: " + path)
-
     test_files = []
-    for root, _, files in os.walk(location):
-      for f in files:
-        if f.endswith(".textproto"):
-          test_files.append(os.path.join(root, f))
+    env_test_files = os.environ.get("TEST_FILES")
+    if env_test_files:
+      for f in env_test_files.split(","):
+        location = r.Rlocation(f)
+        if location:
+          test_files.append(location)
+        else:
+          raise ValueError(f"Could not resolve path: {f}")
+
     return sorted(test_files)
 
 

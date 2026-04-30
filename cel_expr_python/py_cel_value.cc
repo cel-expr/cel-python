@@ -483,7 +483,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
     }
     case cel::Kind::kInt: {
       if (bypass_type_check || PyNumber_Check(py_object)) {
-        int64_t value = PyLong_AsLong(py_object);
+        int64_t value = PyLong_AsLongLong(py_object);
         if (PyErr_Occurred()) {
           return cel::ErrorValue(PyErr_toStatus());
         }
@@ -494,7 +494,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
     }
     case cel::Kind::kUint: {
       if (bypass_type_check || PyNumber_Check(py_object)) {
-        uint64_t value = PyLong_AsUnsignedLong(py_object);
+        uint64_t value = PyLong_AsUnsignedLongLong(py_object);
         if (PyErr_Occurred()) {
           return cel::ErrorValue(PyErr_toStatus());
         }

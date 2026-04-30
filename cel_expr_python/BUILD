@@ -142,6 +142,9 @@ cc_library(
 py_test(
     name = "cel_test",
     srcs = ["cel_test.py"],
+    data = [
+        ":cel",
+    ],
     deps = [
         ":cel",
         "//testing:proto2_test_all_types_py_pb2",
@@ -153,6 +156,13 @@ py_test(
 py_test(
     name = "cel_env_test",
     srcs = ["cel_env_test.py"],
+    data = [
+        ":cel",
+        "//cel_expr_python/ext:ext_bindings",
+        "//cel_expr_python/ext:ext_math",
+        "//cel_expr_python/ext:ext_optional",
+        "//cel_expr_python/ext:ext_strings",
+    ],
     deps = [
         ":cel",
         "//cel_expr_python/ext:ext_bindings",

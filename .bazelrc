@@ -1,4 +1,15 @@
+# Enable platform-specific configuration.
+# This allows Bazel to automatically pick up the `windows` config on Windows.
+common --enable_platform_specific_config
+
 # Disable automatic creation of `__init__.py` files, which prevent multiple
 # workspaces from providing files with the same package prefix (e.g., "cel").
 # See https://github.com/bazelbuild/rules_python/issues/330.
 build --incompatible_default_to_explicit_init_py
+
+# MSVC: Use the C++20 standard in order to support C++20 features that were introduced in clang and gcc
+build:windows --copt="/std:c++20" --cxxopt="/std:c++20"
+# MSVC: Enable modern standards-compatible preprocessor
+build:windows --cxxopt="/Zc:preprocessor" --host_cxxopt="/Zc:preprocessor"
+# MSVC: Link ANTLR statically to avoid Windows DLL linking errors
+build:windows --cxxopt="-DANTLR4CPP_STATIC" --host_cxxopt="-DANTLR4CPP_STATIC"

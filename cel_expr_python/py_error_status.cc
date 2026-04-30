@@ -42,7 +42,8 @@ static absl::Status PyErrorToStatus(PyObject* py_type, PyObject* py_error) {
            {PyExc_SyntaxError, absl::StatusCode::kInternal},
            {PyExc_TypeError, absl::StatusCode::kInvalidArgument},
            {PyExc_ValueError, absl::StatusCode::kOutOfRange},
-           {PyExc_LookupError, absl::StatusCode::kNotFound}});
+           {PyExc_LookupError, absl::StatusCode::kNotFound},
+           {PyExc_OverflowError, absl::StatusCode::kOutOfRange}});
   PyObject* pystr = PyObject_Str(py_error);
   const char* message = pystr ? PyUnicode_AsUTF8(pystr) : "Unknown error";
   Py_XDECREF(pystr);
