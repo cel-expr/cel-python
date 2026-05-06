@@ -146,11 +146,13 @@ py_test(
         ":cel",
     ],
     deps = [
-        ":cel",
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_protobuf//:protobuf",
-    ],
+    ] + select({
+        "@platforms//os:windows": [],
+        "//conditions:default": [":cel"],
+    }),
 )
 
 py_test(
@@ -164,12 +166,16 @@ py_test(
         "//cel_expr_python/ext:ext_strings",
     ],
     deps = [
-        ":cel",
-        "//cel_expr_python/ext:ext_bindings",
-        "//cel_expr_python/ext:ext_math",
-        "//cel_expr_python/ext:ext_optional",
-        "//cel_expr_python/ext:ext_strings",
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
-    ],
+    ] + select({
+        "@platforms//os:windows": [],
+        "//conditions:default": [
+            ":cel",
+            "//cel_expr_python/ext:ext_bindings",
+            "//cel_expr_python/ext:ext_math",
+            "//cel_expr_python/ext:ext_optional",
+            "//cel_expr_python/ext:ext_strings",
+        ],
+    }),
 )

@@ -48,22 +48,24 @@ py_test(
         "TEST_FILES": ",".join(["$(rlocationpath %s)" % t for t in _ALL_TESTS]),
     },
     deps = [
-        "@com_google_cel_spec//proto/cel/expr:checked_py_pb2",
-        "@com_google_cel_spec//proto/cel/expr:value_py_pb2",
-        "@com_google_absl_py//absl/testing:absltest",
-        "//cel_expr_python/ext:ext_bindings",
-        "//cel_expr_python/ext:ext_encoders",
-        "//cel_expr_python/ext:ext_math",
-        "//cel_expr_python/ext:ext_optional",
-        "//cel_expr_python/ext:ext_proto",
-        "//cel_expr_python/ext:ext_strings",
-        "//cel_expr_python:cel",
         "//testing:proto2_test_all_types_py_pb2",
         "//testing:proto3_test_all_types_py_pb2",
         "//testing:simple_py_pb2",
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_cel_spec//proto/cel/expr:checked_py_pb2",
+        "@com_google_cel_spec//proto/cel/expr:value_py_pb2",
         "@com_google_protobuf//:protobuf_python",
         "@rules_python//python/runfiles",
-
-        #        "//third_party/py/google/protobuf:use_fast_cpp_protos",  # Automatically added go/proto_python_upb_flip
-    ],
+    ] + select({
+        "@platforms//os:windows": [],
+        "//conditions:default": [
+            "//cel_expr_python:cel",
+            "//cel_expr_python/ext:ext_bindings",
+            "//cel_expr_python/ext:ext_encoders",
+            "//cel_expr_python/ext:ext_math",
+            "//cel_expr_python/ext:ext_optional",
+            "//cel_expr_python/ext:ext_proto",
+            "//cel_expr_python/ext:ext_strings",
+        ],
+    }),
 )

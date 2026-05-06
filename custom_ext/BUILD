@@ -47,11 +47,15 @@ py_test(
         "//cel_expr_python:cel",
     ],
     deps = [
-        ":sample_cel_ext_cc",
         ":sample_cel_ext_py",
-        "//cel_expr_python:cel",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_absl_py//absl/testing:parameterized",
         "@com_google_protobuf//:protobuf_python",
-    ],
+    ] + select({
+        "@platforms//os:windows": [],
+        "//conditions:default": [
+            ":sample_cel_ext_cc",
+            "//cel_expr_python:cel",
+        ],
+    }),
 )
