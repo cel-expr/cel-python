@@ -36,7 +36,10 @@ py_library(
     data = [
         "//cel_expr_python:cel",
     ],
-    deps = ["//cel_expr_python:cel"],
+    deps = select({
+        "@platforms//os:windows": [],
+        "//conditions:default": ["//cel_expr_python:cel"],
+    }),
 )
 
 py_test(

@@ -73,9 +73,12 @@ class ConformanceTestSuite(unittest.TestSuite):
       "optionals/optionals/optional_struct_optindex_index_value",
       "optionals/optionals/optional_struct_optindex_value",
       "optionals/optionals/struct_optindex_value",
-      # TODO(b/507568865): Timezone support on Windows.
-      "timestamps/timestamp_selectors_tz/.*",
   ]
+
+  if os.name == "nt":
+    # TODO(b/507568865): These tests depend on configuring a timezone database
+    # which isn't available in our windows test environment.
+    SKIP_TESTS.append("timestamps/timestamp_selectors_tz/.*")
 
   def __init__(self):
     super().__init__(self)
