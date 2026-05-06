@@ -15,6 +15,7 @@
 """Helper for building py_cel with bazel for PyPI releases."""
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -49,11 +50,15 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
 
     module_bazel_path = os.path.join(os.path.dirname(__file__), 'MODULE.bazel')
     if os.path.exists(module_bazel_path):
-      sed_command = (
-          "sed -i 's/python_version\\s*=\\s*\".*\"/"
-          f"python_version = \"{python_version}\"/' {module_bazel_path}"
+      with open(module_bazel_path, 'r') as f:
+        content = f.read()
+      content = re.sub(
+          r'python_version\s*=\s*".*"',
+          f'python_version = "{python_version}"',
+          content,
       )
-      subprocess.check_call(sed_command, shell=True)
+      with open(module_bazel_path, 'w') as f:
+        f.write(content)
     else:
       raise RuntimeError(
           f'MODULE.bazel not found at {module_bazel_path}'
@@ -66,6 +71,8 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
     # Build with bazel
     # Use --compilation_mode=opt for release builds
     cmd = ['bazel', 'build', ext.target, '--compilation_mode=opt']
+    if sys.platform == 'darwin':
+      cmd.extend(['--macos_minimum_os=10.13', '--cxxopt=-faligned-allocation'])
     print(f"Building {ext.name} with bazel: {' '.join(cmd)}")
     subprocess.check_call(cmd)
 
@@ -134,8 +141,8 @@ setuptools.setup(
             '//cel_expr_python/ext:ext_proto',
         ),
         BazelExtension(
-            'cel_expr_python.ext.ext_string',
-            '//cel_expr_python/ext:ext_string',
+            'cel_expr_python.ext.ext_strings',
+            '//cel_expr_python/ext:ext_strings',
         ),
     ],
     cmdclass={'build_ext': BazelBuild},

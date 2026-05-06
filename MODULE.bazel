@@ -12,22 +12,14 @@ bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "com_google_absl_py
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 
 # https://registry.bazel.build/modules/cel-cpp
-bazel_dep(name = "cel-cpp", version = "0.14.0", repo_name = "com_google_cel_cpp")
-
-# 04/07/2025
-_CEL_CPP_COMMIT = "7022451780867bd9c173956f5793b5dfb600928e"
-
-_CEL_CPP_SHA256 = "d1b9b2c2e9745826c1c8540a49f972ea4b93dffd5878c6a67756a2627b0119ef"
-
-archive_override(
+bazel_dep(name = "cel-cpp", version = "0.15.0", repo_name = "com_google_cel_cpp")
+single_version_override(
     module_name = "cel-cpp",
     patch_cmds = [
         # ABSL_CONST_INIT is incompatible with MSVC-CL with the /std:c++20 option
         "sed -i 's/ABSL_CONST_INIT //g' common/values/optional_value.cc",
     ],
-    sha256 = _CEL_CPP_SHA256,
-    strip_prefix = "cel-cpp-" + _CEL_CPP_COMMIT,
-    url = "https://github.com/google/cel-cpp/archive/" + _CEL_CPP_COMMIT + ".tar.gz",
+    version = "0.15.0",
 )
 
 # https://registry.bazel.build/modules/cel-spec

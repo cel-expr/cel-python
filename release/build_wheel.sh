@@ -64,15 +64,28 @@ echo "Build directory: ${TMP_DIR}"
 
 pushd "${TMP_DIR}"
 
-cp -r "${SRC_DIR}"/{*,.*} .
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  cp -a "${SRC_DIR}"/. .
+else
+  cp -r "${SRC_DIR}"/{*,.*} .
+fi
 cp "${SRC_DIR}"/release/* .
 rm -rf cel_expr_python/*_test.py
 
 # Substitute $VERSION in pyproject.toml with the value of VERSION.
-sed -i "s/\$VERSION/${VERSION}/g" pyproject.toml
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  sed -i '' "s/\$VERSION/${VERSION}/g" pyproject.toml
+else
+  sed -i "s/\$VERSION/${VERSION}/g" pyproject.toml
+fi
 
 echo "Running cibuildwheel: ${CIBWHEEL_BIN}"
-python -m cibuildwheel "$@"
+PYTHON_BIN="python"
+if command -v python3 &> /dev/null; then
+  PYTHON_BIN="python3"
+fi
+
+"$PYTHON_BIN" -m cibuildwheel "$@"
 
 echo "Copying generated wheels to ${SRC_DIR}/wheelhouse"
 mkdir -p "${SRC_DIR}"/wheelhouse
