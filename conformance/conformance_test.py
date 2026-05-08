@@ -66,13 +66,6 @@ class ConformanceTestSuite(unittest.TestSuite):
       "parse/bytes_literals/triple_single_quoted_unescaped_punctuation",
       "parse/string_literals/triple_double_quoted_unescaped_punctuation",
       "parse/string_literals/triple_single_quoted_unescaped_punctuation",
-      # TODO(b/481818110): fix support for optional types.
-      "optionals/optionals/empty_struct_optindex_hasValue",
-      "optionals/optionals/optional_empty_struct_optindex_hasValue",
-      "optionals/optionals/optional_struct_optindex_index_value",
-      "optionals/optionals/optional_struct_optindex_index_value",
-      "optionals/optionals/optional_struct_optindex_value",
-      "optionals/optionals/struct_optindex_value",
 
       # Recent changes
       "proto2/set_null/repeated_field_timestamp_null_pruned",
@@ -91,8 +84,6 @@ class ConformanceTestSuite(unittest.TestSuite):
       "string_ext/format/default precision for fixed-point clause with uint",
       "string_ext/format/default precision for scientific notation with int",
       "string_ext/format/default precision for scientific notation with uint",
-      "namespace/namespace_shadowing/basic",
-      "namespace/namespace_shadowing/comprehension_shadowing_namespaced_selector_disambiguation",
   ]
 
   if os.name == "nt":
