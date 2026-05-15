@@ -23,6 +23,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "common/container.h"
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_arena.h"
 #include "cel_expr_python/py_cel_env_config.h"
@@ -70,7 +71,7 @@ class PyCelEnv {
   PyCelEnv(const PyCelEnvConfig& config, PyObject* descriptor_pool,
            const std::unordered_map<std::string, PyCelType>& variable_types,
            const std::vector<PyObject*>& extensions,
-           const std::string& container,
+           cel::ExpressionContainer container,
            const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
            const std::unordered_map<std::string, py::object>& function_impls);
 

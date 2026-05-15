@@ -26,9 +26,27 @@ The `cel.NewEnv` constructor also accepts the following optional parameters:
 *   `pool` (`descriptor_pool.DescriptorPool`): The descriptor pool used for
     resolving protobuf message types within CEL expressions. If not provided,
     a default pool (`descriptor_pool.Default()`) is used.
-*   `container` (str): The container name used for name resolution. For example,
+*   `container` (`str` or `cel.ExpressionContainer`): The container name used
+    for name resolution. For example,
     if `container` is `"foo.bar"`, then `Baz` will resolve to
     `foo.bar.Baz`.
+
+    You can also pass a `cel.ExpressionContainer` to configure abbreviations
+    and aliases:
+
+    ```python
+    container = cel.ExpressionContainer(
+        name="foo.bar",
+        abbreviations=["foo.bar.baz"],
+        aliases={"my_alias": "full.name.of.something"}
+    )
+    cel_env = cel.NewEnv(container=container)
+    ```
+
+    *   `abbreviations`: A list of fully qualified names that can be referred
+        to by their last component.
+    *   `aliases`: A dictionary mapping an alias name to a fully qualified
+        name.
 *   `extensions` (list): A list of extension objects to load. This can include
     standard extensions (like `math` or `string` libraries) or custom extensions
     defined in Python or C++.

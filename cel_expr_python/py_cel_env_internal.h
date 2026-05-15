@@ -20,13 +20,12 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "common/function_descriptor.h"
+#include "common/container.h"
 #include "compiler/compiler.h"
 #include "env/env.h"
 #include "env/env_runtime.h"
@@ -76,7 +75,8 @@ class PyCelEnvInternal {
   static absl::StatusOr<std::shared_ptr<PyCelEnvInternal>> NewCelEnvInternal(
       const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
       const std::unordered_map<std::string, PyCelType>& variable_types,
-      const std::vector<PyObject*>& extensions, const std::string& container,
+      const std::vector<PyObject*>& extensions,
+      cel::ExpressionContainer container,
       const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
       const std::unordered_map<std::string, py::object>& function_impls);
 

@@ -83,6 +83,12 @@ class PyCelError : public pybind11::builtin_exception {
   PyObject* py_err_type_;
 };
 
+void ThrowIfError(const absl::Status& status) {
+  if (!status.ok()) {
+    throw PyCelError(status);
+  }
+}
+
 std::runtime_error StatusToException(const absl::Status& status) {
   ABSL_CHECK(!status.ok());  // Crash OK: all call sites are
                              // local to the library.

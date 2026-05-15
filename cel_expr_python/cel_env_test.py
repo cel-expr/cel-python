@@ -108,6 +108,147 @@ class CelEnvTest(absltest.TestCase):
         """),
     )
 
+  def test_expression_container_abbreviations_and_aliases(self):
+    expr_container = cel.ExpressionContainer(
+        "test.container", abbreviations=["x.y.foo"], aliases={"abc": "x.y.bar"}
+    )
+
+    env: cel.Env = cel.NewEnv(
+        container=expr_container,
+        variables={
+            "x.y.foo": cel.Type.INT,
+            "x.y.bar": cel.Type.STRING,
+        },
+    )
+
+    res = env.compile("foo").eval(data={"x.y.foo": 42})
+    self.assertEqual(res.value(), 42)
+    res = env.compile("abc").eval(data={"x.y.bar": "chocolate"})
+    self.assertEqual(res.value(), "chocolate")
+
+    yaml: str = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          container:
+            name: "test.container"
+            abbreviations:
+              - "x.y.foo"
+            aliases:
+              - alias: "abc"
+                qualified_name: "x.y.bar"
+          variables:
+            - name: "x.y.bar"
+              type_name: "string"
+            - name: "x.y.foo"
+              type_name: "int"
+        """),
+    )
+
+  def test_abbreviations_and_aliases_from_yaml(self):
+    env: cel.Env = cel.NewEnv(config=cel.NewEnvConfigFromYaml("""
+        container:
+          name: "test.container"
+          abbreviations:
+            - "x.y.foo"
+          aliases:
+            - alias: "abc"
+              qualified_name: "x.y.bar"
+        variables:
+          - name: "x.y.bar"
+            type_name: "string"
+          - name: "x.y.foo"
+            type_name: "int"
+      """))
+
+    res = env.compile("foo").eval(data={"x.y.foo": 42})
+    self.assertEqual(res.value(), 42)
+    res = env.compile("abc").eval(data={"x.y.bar": "chocolate"})
+    self.assertEqual(res.value(), "chocolate")
+
+  def test_abbreviations_and_aliases_combined(self):
+    env: cel.Env = cel.NewEnv(
+        config=cel.NewEnvConfigFromYaml("""
+          container:
+            name: "test.container"
+            abbreviations:
+              - "x.y.foo"
+            aliases:
+              - alias: "abc"
+                qualified_name: "x.y.bar"
+          variables:
+            - name: "x.y.bar"
+              type_name: "string"
+            - name: "x.y.foo"
+              type_name: "int"
+            - name: "a.b.qux"
+              type_name: "string"
+            - name: "a.b.baz"
+              type_name: "int"
+        """),
+        container=cel.ExpressionContainer(
+            "test.container",
+            abbreviations=["a.b.baz"],
+            aliases={"def": "a.b.qux"},
+        ),
+    )
+
+    res = env.compile("foo").eval(data={"x.y.foo": 42})
+    self.assertEqual(res.value(), 42)
+    res = env.compile("baz").eval(data={"a.b.baz": 24})
+    self.assertEqual(res.value(), 24)
+
+    res = env.compile("abc").eval(data={"x.y.bar": "chocolate"})
+    self.assertEqual(res.value(), "chocolate")
+    res = env.compile("def").eval(data={"a.b.qux": "vanilla"})
+    self.assertEqual(res.value(), "vanilla")
+
+    yaml: str = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          container:
+            name: "test.container"
+            abbreviations:
+              - "a.b.baz"
+              - "x.y.foo"
+            aliases:
+              - alias: "abc"
+                qualified_name: "x.y.bar"
+              - alias: "def"
+                qualified_name: "a.b.qux"
+          variables:
+            - name: "a.b.baz"
+              type_name: "int"
+            - name: "a.b.qux"
+              type_name: "string"
+            - name: "x.y.bar"
+              type_name: "string"
+            - name: "x.y.foo"
+              type_name: "int"
+        """),
+    )
+
+  def test_alias_redefinition_error(self):
+    with self.assertRaises(Exception) as e:
+      cel.NewEnv(
+          container=cel.ExpressionContainer(
+              "test.container", aliases={"abc": "x.y.bar"}
+          ),
+          config=cel.NewEnvConfigFromYaml("""
+            container:
+              name: "test.container"
+              aliases:
+                - alias: "abc"
+                  qualified_name: "x.y.baz"
+          """),
+      )
+    self.assertIn(
+        "Alias 'abc' is already defined with a different qualified name:"
+        " x.y.baz",
+        str(e.exception),
+    )
+
   def test_config_export_variables(self):
     config: cel.Env = cel.NewEnv(
         variables={

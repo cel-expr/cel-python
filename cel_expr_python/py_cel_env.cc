@@ -25,7 +25,7 @@
 #include <vector>
 
 #include "absl/log/absl_check.h"
-#include "env/config.h"
+#include "common/container.h"
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_arena.h"
 #include "cel_expr_python/py_cel_env_config.h"
@@ -42,13 +42,42 @@ namespace cel_python {
 namespace py = ::pybind11;
 
 void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
+  py::class_<cel::ExpressionContainer>(m, "ExpressionContainer")
+      .def(py::init(
+               [](const std::string& name,
+                  const std::optional<std::vector<std::string>>& abbreviations,
+                  const std::optional<
+                      std::unordered_map<std::string, std::string>>& aliases) {
+                 auto container =
+                     ThrowIfError(cel::MakeExpressionContainer(name));
+
+                 if (abbreviations) {
+                   for (const auto& abrev : *abbreviations) {
+                     ThrowIfError(container.AddAbbreviation(abrev));
+                   }
+                 }
+
+                 if (aliases) {
+                   for (const auto& [alias, full_name] : *aliases) {
+                     ThrowIfError(container.AddAlias(alias, full_name));
+                   }
+                 }
+
+                 return container;
+               }),
+           py::arg("name") = "", py::arg("abbreviations") = py::none(),
+           py::arg("aliases") = py::none())
+      .def("container", [](const cel::ExpressionContainer& self) {
+        return std::string(self.container());
+      });
+
   py::class_<PyCelEnv, std::shared_ptr<PyCelEnv>> cel_class(m, "Env");
   m.def(
       "NewEnv",
       [](py::object descriptor_pool, std::optional<PyCelEnvConfig>& config,
          std::optional<std::unordered_map<std::string, PyCelType>>& variables,
          std::optional<std::vector<py::object>>& extensions,
-         const std::optional<std::string>& container,
+         py::object container,
          std::optional<std::vector<std::shared_ptr<PyCelFunctionDecl>>>&
              functions,
          std::optional<std::unordered_map<std::string, py::object>>&
@@ -77,10 +106,23 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
           }
         }
 
+        cel::ExpressionContainer expr_container;
+        if (!container.is_none()) {
+          if (py::isinstance<py::str>(container)) {
+            expr_container = ThrowIfError(
+                cel::MakeExpressionContainer(container.cast<std::string>()));
+          } else if (py::isinstance<cel::ExpressionContainer>(container)) {
+            expr_container = container.cast<cel::ExpressionContainer>();
+          } else {
+            throw py::type_error(
+                "container must be a string or ExpressionContainer");
+          }
+        }
+
         return PyCelEnv(config.value_or(PyCelEnvConfig()), pool_ptr,
                         std::move(variables).value_or(
                             std::unordered_map<std::string, PyCelType>{}),
-                        ext_ptrs, container.value_or(""),
+                        ext_ptrs, std::move(expr_container),
                         functions.value_or(
                             std::vector<std::shared_ptr<PyCelFunctionDecl>>{}),
                         function_impls.value_or(
@@ -125,7 +167,8 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
 PyCelEnv::PyCelEnv(
     const PyCelEnvConfig& config, PyObject* descriptor_pool,
     const std::unordered_map<std::string, PyCelType>& variable_types,
-    const std::vector<PyObject*>& extensions, const std::string& container,
+    const std::vector<PyObject*>& extensions,
+    cel::ExpressionContainer container,
     const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
     const std::unordered_map<std::string, py::object>& function_impls) {
   env_ = ThrowIfError(PyCelEnvInternal::NewCelEnvInternal(

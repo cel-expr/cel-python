@@ -17,7 +17,6 @@
 #define THIRD_PARTY_CEL_PYTHON_PY_ERROR_STATUS_H_
 
 #include <stdexcept>
-#include <string>
 #include <utility>
 
 #include "absl/status/status.h"
@@ -33,6 +32,7 @@
 namespace cel_python {
 
 std::runtime_error StatusToException(const absl::Status& status);
+void ThrowIfError(const absl::Status& status);
 
 template <typename T>
 T ThrowIfError(absl::StatusOr<T> status_or) {

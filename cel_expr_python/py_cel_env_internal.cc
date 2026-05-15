@@ -26,6 +26,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "checker/type_checker_builder.h"
+#include "common/container.h"
 #include "common/function_descriptor.h"
 #include "common/kind.h"
 #include "common/type.h"
@@ -106,7 +107,8 @@ absl::StatusOr<std::shared_ptr<PyCelEnvInternal>>
 PyCelEnvInternal::NewCelEnvInternal(
     const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
     const std::unordered_map<std::string, PyCelType>& variable_types,
-    const std::vector<PyObject*>& extensions, const std::string& container,
+    const std::vector<PyObject*>& extensions,
+    cel::ExpressionContainer container,
     const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
     const std::unordered_map<std::string, py::object>& function_impls) {
   cel::Config config = env_config.GetConfig();
@@ -151,7 +153,45 @@ PyCelEnvInternal::NewCelEnvInternal(
     extension_handles.push_back(std::move(handle));
   }
 
-  config.SetContainerConfig(cel::Config::ContainerConfig{.name = container});
+  cel::Config::ContainerConfig container_config = config.GetContainerConfig();
+  if (!container.container().empty()) {
+    container_config.name = std::string(container.container());
+  }
+  for (const auto& abbr : container.ListAbbreviations()) {
+    bool found = false;
+    for (const auto& existing : container_config.abbreviations) {
+      if (existing == abbr) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      container_config.abbreviations.push_back(abbr);
+    }
+  }
+  for (const auto& alias_listing : container.ListAliases()) {
+    if (alias_listing.IsAbbreviation()) {
+      continue;
+    }
+    bool found = false;
+    for (const auto& existing : container_config.aliases) {
+      if (existing.alias == alias_listing.alias) {
+        if (existing.qualified_name != alias_listing.name) {
+          return absl::InvalidArgumentError(absl::StrCat(
+              "Alias '", alias_listing.alias,
+              "' is already defined with a different qualified name: ",
+              existing.qualified_name));
+        }
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      container_config.aliases.push_back(
+          {.alias = alias_listing.alias, .qualified_name = alias_listing.name});
+    }
+  }
+  config.SetContainerConfig(container_config);
 
   absl::flat_hash_map<std::string, py::object> impls;
   for (const std::shared_ptr<PyCelFunctionDecl>& function : functions) {
@@ -200,7 +240,19 @@ absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
   cel::TypeCheckerBuilder& checker_builder =
       compiler_builder->GetCheckerBuilder();
 
-  checker_builder.set_container(config.GetContainerConfig().name);
+  cel::ExpressionContainer container;
+  const auto& container_config = config.GetContainerConfig();
+  if (!container_config.IsEmpty()) {
+    CEL_PYTHON_RETURN_IF_ERROR(container.SetContainer(container_config.name));
+    for (const auto& abbr : container_config.abbreviations) {
+      CEL_PYTHON_RETURN_IF_ERROR(container.AddAbbreviation(abbr));
+    }
+    for (const auto& alias : container_config.aliases) {
+      CEL_PYTHON_RETURN_IF_ERROR(
+          container.AddAlias(alias.alias, alias.qualified_name));
+    }
+  }
+  checker_builder.SetExpressionContainer(std::move(container));
 
   // Convert variable types from cel::TypeInfo to PyCelType.
   google::protobuf::Arena* arena = checker_builder.arena();
