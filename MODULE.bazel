@@ -3,23 +3,27 @@ module(
 )
 
 # https://registry.bazel.build/modules/abseil-cpp
-bazel_dep(name = "abseil-cpp", version = "20250814.1", repo_name = "com_google_absl")
+bazel_dep(name = "abseil-cpp", version = "20260107.0", repo_name = "com_google_absl")
 
 # https://registry.bazel.build/modules/abseil-py
-bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "com_google_absl_py")
+bazel_dep(name = "abseil-py", version = "2.4.0", repo_name = "com_google_absl_py")
 
 # https://github.com/bazelbuild/bazel-skylib
-bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
 
 # https://registry.bazel.build/modules/cel-cpp
 bazel_dep(name = "cel-cpp", version = "0.15.0", repo_name = "com_google_cel_cpp")
-single_version_override(
+git_override(
     module_name = "cel-cpp",
+    commit = "2e6e9ff4493bfbe0baf883107f3fb7ce6f675d88",
     patch_cmds = [
         # ABSL_CONST_INIT is incompatible with MSVC-CL with the /std:c++20 option
         "sed -i 's/ABSL_CONST_INIT //g' common/values/optional_value.cc",
     ],
-    version = "0.15.0",
+    patch_cmds_win = [
+        "python -c \"import sys; path='common/values/optional_value.cc'; content=open(path).read(); open(path,'w').write(content.replace('ABSL_CONST_INIT ',''))\"",
+    ],
+    remote = "https://github.com/google/cel-cpp",
 )
 
 # https://registry.bazel.build/modules/cel-spec
@@ -32,7 +36,7 @@ bazel_dep(name = "googletest", version = "1.17.0.bcr.2", repo_name = "com_google
 bazel_dep(name = "platforms", version = "1.0.0")
 
 # https://registry.bazel.build/modules/protobuf
-bazel_dep(name = "protobuf", version = "33.1", repo_name = "com_google_protobuf")
+bazel_dep(name = "protobuf", version = "33.4", repo_name = "com_google_protobuf")
 
 # https://registry.bazel.build/modules/pybind11_abseil
 bazel_dep(name = "pybind11_abseil", version = "202402.0")
@@ -41,25 +45,33 @@ bazel_dep(name = "pybind11_abseil", version = "202402.0")
 bazel_dep(name = "pybind11_bazel", version = "3.0.0")
 
 # https://registry.bazel.build/modules/rules_cc
-bazel_dep(name = "rules_cc", version = "0.2.14")
+bazel_dep(name = "rules_cc", version = "0.2.16")
 
 # https://registry.bazel.build/modules/rules_proto
 bazel_dep(name = "rules_proto", version = "7.1.0")
 
 # https://registry.bazel.build/modules/rules_python
-bazel_dep(name = "rules_python", version = "1.7.0")
+bazel_dep(name = "rules_python", version = "1.9.0")
 
 # On Windows the file system is case-insensitive, which creates a collision between
 # antlr4-cpp-runtime/VERSION and the system `#include <version>`
 single_version_override(
     module_name = "antlr4-cpp-runtime",
     patch_cmds = [
-        "mv VERSION VERSION.txt",
+        "python -c \"import os; os.rename('VERSION', 'VERSION.txt') if os.path.exists('VERSION') else None\"",
     ],
 )
 
-python_rules = use_extension("@rules_python//python/extensions:python.bzl", "python")
-python_rules.toolchain(
-    is_default = True,
-    python_version = "3.11",
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.defaults(python_version = "3.11")
+python.toolchain(python_version = "3.11")
+use_repo(python, "pythons_hub")
+
+pybind11_internal_configure = use_extension(
+    "@pybind11_bazel//:internal_configure.bzl",
+    "internal_configure_extension",
 )
+use_repo(pybind11_internal_configure, "pybind11")
+
+local_repo_ext = use_extension("//cel_expr_python:local_repo_extension.bzl", "local_repo_ext")
+use_repo(local_repo_ext, "python_headers_custom")
