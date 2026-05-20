@@ -394,7 +394,7 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
       return py_map;
     }
     case cel::ValueKind::kTimestamp: {
-      absl::optional<cel::TimestampValue> timestamp = cel_value.AsTimestamp();
+      std::optional<cel::TimestampValue> timestamp = cel_value.AsTimestamp();
       if (!timestamp.has_value()) {
         PyErr_Format(PyExc_RuntimeError, "Cannot convert to timestamp");
         return nullptr;
@@ -402,7 +402,7 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
       return py::cast(timestamp->ToTime()).release().ptr();
     }
     case cel::ValueKind::kDuration: {
-      absl::optional<cel::DurationValue> duration = cel_value.AsDuration();
+      std::optional<cel::DurationValue> duration = cel_value.AsDuration();
       if (!duration.has_value()) {
         PyErr_Format(PyExc_RuntimeError, "Cannot convert to duration");
         return nullptr;
