@@ -9,7 +9,25 @@ build --incompatible_default_to_explicit_init_py
 
 # MSVC: Use the C++20 standard in order to support C++20 features that were introduced in clang and gcc
 build:windows --copt="/std:c++20" --cxxopt="/std:c++20"
+# MSVC: Corrects the __cplusplus macro to report the true standard
+build:windows --copt="/Zc:__cplusplus" --cxxopt="/Zc:__cplusplus"
 # MSVC: Enable modern standards-compatible preprocessor
 build:windows --cxxopt="/Zc:preprocessor" --host_cxxopt="/Zc:preprocessor"
 # MSVC: Link ANTLR statically to avoid Windows DLL linking errors
 build:windows --cxxopt="-DANTLR4CPP_STATIC" --host_cxxopt="-DANTLR4CPP_STATIC"
+
+# Repo environment bypasses for corporate proxy (Windows-only)
+common:windows --repo_env=no_proxy=bcr.bazel.build,bazel.build,storage.googleapis.com,*.googleapis.com,metadata.google.internal,169.254.169.254
+common:windows --repo_env=NO_PROXY=bcr.bazel.build,bazel.build,storage.googleapis.com,*.googleapis.com,metadata.google.internal,169.254.169.254
+
+# Downloader attempts and retries for BCR network stability (Windows-only)
+common:windows --http_connector_attempts=10
+common:windows --experimental_repository_downloader_retries=10
+
+# Build verbosity and output options (Windows-only)
+build:windows --verbose_failures
+test:windows --test_output=errors
+
+# GCS remote caching config (Windows-only, active by default on Windows!)
+build:windows --remote_cache=https://storage.googleapis.com/windows-cel-python-remote-cache
+build:windows --google_default_credentials=true
