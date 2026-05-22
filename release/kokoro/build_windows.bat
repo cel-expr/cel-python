@@ -17,10 +17,23 @@
 :: Core Bazel Build script for CEL Python on Windows.
 
 echo === Loading Environment Configuration ===
-call "%~dp0set_env_windows.bat"
+call "%~dp0set_env_windows.bat" %1
 if !ERRORLEVEL! NEQ 0 (
     echo Failed to configure build environment!
     exit /b 1
+)
+
+set "BUILD_STATUS=0"
+
+echo --- Backing up MODULE.bazel ---
+copy MODULE.bazel MODULE.bazel.bak >nul
+
+echo --- Dynamically Adjusting Python Version in MODULE.bazel ---
+!PYTHON_EXE! -c "import sys; path='MODULE.bazel'; content=open(path).read(); open(path,'w').write(content.replace('python_version = \"3.11\"', 'python_version = \"!PYTHON_VERSION!\"'))"
+if !ERRORLEVEL! NEQ 0 (
+    echo Failed to modify MODULE.bazel!
+    set "BUILD_STATUS=1"
+    goto cleanup
 )
 
 :: Fetch dependencies. We perform multiple attempts to absorb transient flaky network connections.
@@ -42,8 +55,8 @@ if !FETCH_STATUS! NEQ 0 (
         )
     )
     echo Fetch failed permanently or max attempts reached.
-    if exist fetch.log del fetch.log
-    exit /b 1
+    set "BUILD_STATUS=1"
+    goto cleanup
 )
 if exist fetch.log del fetch.log
 
@@ -53,7 +66,7 @@ set "OUTPUT_BASE=!OUTPUT_BASE:/=\!"
 echo Output Base: !OUTPUT_BASE!
 
 echo --- Resolving Hermetic Python Toolchain ---
-for /f "tokens=*" %%A in ('dir /b /ad "!OUTPUT_BASE!\external\*python_3_11_host" 2^>nul') do set "PY_HOST_DIR=%%A"
+for /f "tokens=*" %%A in ('dir /b /ad "!OUTPUT_BASE!\external\*python_!PY_VER_UNDERSCORE!_host" 2^>nul') do set "PY_HOST_DIR=%%A"
 echo Hermetic Python Directory: !PY_HOST_DIR!
 
 if not "!PY_HOST_DIR!" == "" (
@@ -87,7 +100,18 @@ echo --- Bazel Build ---
 bazel %STARTUP_FLAGS% build %LINK_FLAGS% //...
 if !ERRORLEVEL! NEQ 0 (
     echo Build failed!
-    exit /b 1
+    set "BUILD_STATUS=1"
+    goto cleanup
 )
 
 echo --- Build Success ---
+
+:cleanup
+if exist fetch.log del fetch.log
+if exist MODULE.bazel.bak (
+    echo --- Restoring MODULE.bazel ---
+    move /y MODULE.bazel.bak MODULE.bazel >nul
+)
+if "%BUILD_STATUS%" NEQ "0" (
+    exit /b %BUILD_STATUS%
+)

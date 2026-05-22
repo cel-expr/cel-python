@@ -52,15 +52,21 @@ echo STARTUP_FLAGS set to %STARTUP_FLAGS%
 echo --- Bazel Version ---
 bazel %STARTUP_FLAGS% version
 
+set "PYTHON_VERSION=%~1"
+if "%PYTHON_VERSION%" == "" (
+    set "PYTHON_VERSION=3.11"
+)
+set "PY_VER_UNDERSCORE=%PYTHON_VERSION:.=_%"
+set "PY_VER_NO_DOT=%PYTHON_VERSION:.=%"
+
+echo Python Version Selected: %PYTHON_VERSION%
+
 :: Detect Python executable first (needed for downloading BCR assets dynamically)
 set PYTHON_EXE=python
-where python3.11 >nul 2>&1
+where python%PYTHON_VERSION% >nul 2>&1
 if !ERRORLEVEL! EQU 0 (
-    set PYTHON_EXE=python3.11
-) else if exist C:\Python311\python.exe (
-    set PYTHON_EXE=C:\Python311\python.exe
+    set PYTHON_EXE=python%PYTHON_VERSION%
+) else if exist C:\Python%PY_VER_NO_DOT%\python.exe (
+    set PYTHON_EXE=C:\Python%PY_VER_NO_DOT%\python.exe
 )
 echo Python set to %PYTHON_EXE%
-
-echo --- Python Version ---
-!PYTHON_EXE! --version

@@ -17,18 +17,43 @@ setlocal enabledelayedexpansion
 :: presubmit_windows.bat
 :: Kokoro entrypoint for Windows Presubmit builds.
 
-echo === Launching Windows Build Workflow ===
-call "%~dp0build_windows.bat"
-if !ERRORLEVEL! NEQ 0 (
-    echo Windows Presubmit Build FAILED!
-    exit /b 1
+set "IN_PRESUBMIT=1"
+set "PRESUBMIT_STATUS=0"
+if "%PYTHON_VERSIONS%" == "" (
+    set "PYTHON_VERSIONS=3.11"
 )
 
-echo --- Bazel Test ---
-bazel %STARTUP_FLAGS% test %LINK_FLAGS% --test_output=errors //...
-if !ERRORLEVEL! NEQ 0 (
-    echo Tests failed!
-    exit /b 1
+echo === Launching Windows Build Workflow ===
+for %%V in (%PYTHON_VERSIONS%) do (
+    echo --- Building Python %%V ---
+    call "%~dp0build_windows.bat" %%V
+    if !ERRORLEVEL! NEQ 0 (
+        echo Windows Presubmit Build FAILED for Python %%V!
+        set "PRESUBMIT_STATUS=1"
+        goto cleanup
+    )
+
+    echo --- Bazel Test Python %%V ---
+    bazel %STARTUP_FLAGS% test %LINK_FLAGS% --test_output=errors //...
+    if !ERRORLEVEL! NEQ 0 (
+        echo Tests failed for Python %%V!
+        set "PRESUBMIT_STATUS=1"
+        goto cleanup
+    )
+
+    if exist MODULE.bazel.bak (
+        echo --- Restoring MODULE.bazel ---
+        move /y MODULE.bazel.bak MODULE.bazel >nul
+    )
 )
 
 echo Windows Presubmit Build and Tests PASSED!
+
+:cleanup
+if exist MODULE.bazel.bak (
+    echo --- Restoring MODULE.bazel ---
+    move /y MODULE.bazel.bak MODULE.bazel >nul
+)
+if "%PRESUBMIT_STATUS%" NEQ "0" (
+    exit /b %PRESUBMIT_STATUS%
+)
