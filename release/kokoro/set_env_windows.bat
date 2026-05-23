@@ -70,3 +70,4 @@ if !ERRORLEVEL! EQU 0 (
     set PYTHON_EXE=C:\Python%PY_VER_NO_DOT%\python.exe
 )
 echo Python set to %PYTHON_EXE%
+exit /b 0

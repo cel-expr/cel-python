@@ -14,6 +14,7 @@
 
 """Helper for building py_cel with bazel for PyPI releases."""
 
+import glob
 import os
 import re
 import shutil
@@ -46,6 +47,7 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
     # Thus, we can use the current Python version as the target version for
     # the bazel build.
     python_version = f'{sys.version_info.major}.{sys.version_info.minor}'
+
     print(f'Building for target Python version: {python_version}')
 
     module_bazel_path = os.path.join(os.path.dirname(__file__), 'MODULE.bazel')
@@ -60,9 +62,7 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
       with open(module_bazel_path, 'w') as f:
         f.write(content)
     else:
-      raise RuntimeError(
-          f'MODULE.bazel not found at {module_bazel_path}'
-      )
+      raise RuntimeError(f'MODULE.bazel not found at {module_bazel_path}')
 
     dest_path = self.get_ext_fullpath(ext.name)
     dest_dir = os.path.dirname(dest_path)
@@ -71,8 +71,10 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
     # Build with bazel
     # Use --compilation_mode=opt for release builds
     cmd = ['bazel', 'build', ext.target, '--compilation_mode=opt']
+    if sys.platform == 'win32':
+      self.platform_config_windows(cmd, python_version)
     if sys.platform == 'darwin':
-      cmd.extend(['--macos_minimum_os=10.13', '--cxxopt=-faligned-allocation'])
+      self.platform_config_macos(cmd)
     print(f"Building {ext.name} with bazel: {' '.join(cmd)}")
     subprocess.check_call(cmd)
 
@@ -111,6 +113,57 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
 
     print(f'Copying {found} to {dest_path}')
     shutil.copyfile(found, dest_path)
+
+  def platform_config_windows(self, cmd, python_version):
+    """Applies Windows-specific Bazel workarounds for Hermetic Python."""
+    # 1. Get output base
+    output_base = subprocess.check_output(
+        ['bazel', '--output_user_root=C:/tmp', 'info', 'output_base'], text=True
+    ).strip()
+
+    # 2. Find hermetic python directory
+    py_ver_underscore = python_version.replace('.', '_')
+    pattern = os.path.join(
+        output_base, 'external', f'*python_{py_ver_underscore}_host'
+    )
+    matches = glob.glob(pattern)
+    if not matches:
+      print(
+          'Warning: Hermetic Python directory not found with pattern:'
+          f' {pattern}'
+      )
+      return
+
+    py_host_dir = matches[0]
+    print(f'Found Hermetic Python Directory: {py_host_dir}')
+
+    # 3. Copy libs to a space-free directory
+    target_dir = r'C:\tmp\python_libs'
+    os.makedirs(target_dir, exist_ok=True)
+
+    lib_pattern = os.path.join(py_host_dir, 'libs', 'python*.lib')
+    for lib_file in glob.glob(lib_pattern):
+      print(f'Copying {lib_file} to {target_dir}')
+      shutil.copy(lib_file, target_dir)
+
+    dll_pattern = os.path.join(py_host_dir, 'python*.dll')
+    for dll_file in glob.glob(dll_pattern):
+      print(f'Copying {dll_file} to {target_dir}')
+      shutil.copy(dll_file, target_dir)
+
+    # 4. Add link flags to bazel command
+    cmd.extend([
+        '--linkopt=/LIBPATH:C:\\tmp\\python_libs',
+        '--action_env=PATH',
+        '--cxxopt=-DANTLR4CPP_STATIC',
+    ])
+
+    # 5. Add to PATH in current process so bazel can find the DLLs
+    os.environ['PATH'] = f"{target_dir};{os.environ.get('PATH', '')}"
+
+  def platform_config_macos(self, cmd):
+    """Applies macOS-specific Bazel configurations."""
+    cmd.extend(['--macos_minimum_os=10.13', '--cxxopt=-faligned-allocation'])
 
 
 setuptools.setup(
