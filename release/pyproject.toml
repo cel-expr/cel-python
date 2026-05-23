@@ -22,6 +22,7 @@ classifiers = [
   "Topic :: Software Development :: Interpreters",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
 ]
 license = "Apache-2.0"
 readme = "README.md"
@@ -37,11 +38,15 @@ exclude = ["codelab*", "conformance*", "custom_ext*", "release*", "testing*", "w
 
 [tool.cibuildwheel]
 build = "cp311-* cp312-* cp313-* cp314-*"
-skip = "*musllinux*"
+skip = "*musllinux* *win32*"
 test-command = "python {project}/cel_basic_test.py"
+build-verbosity = 1
 
 [tool.cibuildwheel.linux]
 before-all = "echo 'Installing bazelisk'; curl -LO https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64 && chmod +x bazelisk-linux-amd64 && mv bazelisk-linux-amd64 /usr/local/bin/bazel"
 
 [tool.cibuildwheel.macos]
 before-all = "echo 'Installing bazelisk'; brew install bazelisk"
+
+[tool.cibuildwheel.windows]
+# Bazel is expected to be already installed and in the PATH on Windows.
