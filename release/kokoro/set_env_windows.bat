@@ -14,7 +14,7 @@
 :: limitations under the License.
 ::
 :: set_env_windows.bat
-:: Configures the Windows environment, proxies, startup flags, caches BCR assets, and ANTLR workarounds.
+:: Configures the Windows environment
 
 echo --- Environment Info ---
 echo Host Name: %COMPUTERNAME%
@@ -24,9 +24,6 @@ echo Current Directory: %CD%
 :: Change directory to the repository root (moving up from release/kokoro)
 cd /d "%~dp0..\.."
 echo New Directory: %CD%
-
-set "no_proxy=bcr.bazel.build,bazel.build"
-echo no_proxy set to %no_proxy%
 
 echo --- Locating Bash ---
 where bash.exe
@@ -40,14 +37,6 @@ set "STARTUP_FLAGS=--output_user_root=C:/tmp"
 :: Configure retry parameters for Bazel fetch to absorb transient download timeouts
 set "FETCH_RETRIES=10"
 set "FETCH_RETRY_DELAY_S=10"
-
-:: Configure JVM proxy bypasses to prevent corporate proxy interception of Google API/GCS/Metadata server connections
-set "STARTUP_FLAGS=%STARTUP_FLAGS% --host_jvm_args=-Dhttp.nonProxyHosts=bcr.bazel.build^|*.bazel.build^|storage.googleapis.com^|*.googleapis.com^|metadata.google.internal^|169.254.169.254"
-
-:: Force JVM to prefer the IPv4 network stack to absorb sporadic IPv6 network drops
-set "STARTUP_FLAGS=%STARTUP_FLAGS% --host_jvm_args=-Djava.net.preferIPv4Stack=true"
-
-echo STARTUP_FLAGS set to %STARTUP_FLAGS%
 
 echo --- Bazel Version ---
 bazel %STARTUP_FLAGS% version
@@ -70,3 +59,4 @@ if !ERRORLEVEL! EQU 0 (
     set PYTHON_EXE=C:\Python%PY_VER_NO_DOT%\python.exe
 )
 echo Python set to %PYTHON_EXE%
+exit /b 0

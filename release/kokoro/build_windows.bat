@@ -61,7 +61,7 @@ if !FETCH_STATUS! NEQ 0 (
 if exist fetch.log del fetch.log
 
 echo --- Getting Output Base ---
-for /f "tokens=*" %%i in ('bazel --output_user_root=C:/tmp info output_base') do set "OUTPUT_BASE=%%i"
+for /f "tokens=*" %%i in ('bazel %STARTUP_FLAGS% info output_base') do set "OUTPUT_BASE=%%i"
 set "OUTPUT_BASE=!OUTPUT_BASE:/=\!"
 echo Output Base: !OUTPUT_BASE!
 
@@ -79,21 +79,6 @@ if not "!PY_HOST_DIR!" == "" (
     set "PATH=C:\tmp\python_libs;!PATH!"
 ) else (
     echo Warning: Hermetic Python directory not found! Skipping import library copy.
-)
-
-echo --- Applying VERSION Collision Fix ---
-set "ANTLR_DIR=!OUTPUT_BASE!\external\antlr4-cpp-runtime+"
-if exist "!ANTLR_DIR!\VERSION" (
-    if not exist "!ANTLR_DIR!\VERSION.txt" (
-        echo Renaming !ANTLR_DIR!\VERSION to VERSION.txt
-        ren "!ANTLR_DIR!\VERSION" VERSION.txt
-    )
-)
-if exist "!ANTLR_DIR!\version" (
-    if not exist "!ANTLR_DIR!\version.txt" (
-        echo Renaming !ANTLR_DIR!\version to version.txt
-        ren "!ANTLR_DIR!\version" version.txt
-    )
 )
 
 echo --- Bazel Build ---

@@ -16,10 +16,6 @@ build:windows --cxxopt="/Zc:preprocessor" --host_cxxopt="/Zc:preprocessor"
 # MSVC: Link ANTLR statically to avoid Windows DLL linking errors
 build:windows --cxxopt="-DANTLR4CPP_STATIC" --host_cxxopt="-DANTLR4CPP_STATIC"
 
-# Repo environment bypasses for corporate proxy (Windows-only)
-common:windows --repo_env=no_proxy=bcr.bazel.build,bazel.build,storage.googleapis.com,*.googleapis.com,metadata.google.internal,169.254.169.254
-common:windows --repo_env=NO_PROXY=bcr.bazel.build,bazel.build,storage.googleapis.com,*.googleapis.com,metadata.google.internal,169.254.169.254
-
 # Downloader attempts and retries for BCR network stability (Windows-only)
 common:windows --http_connector_attempts=10
 common:windows --experimental_repository_downloader_retries=10
