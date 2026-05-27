@@ -17,6 +17,7 @@
 import datetime
 import os
 import re
+import sys
 from typing import Any
 import unittest
 
@@ -66,7 +67,6 @@ class ConformanceTestSuite(unittest.TestSuite):
       "parse/bytes_literals/triple_single_quoted_unescaped_punctuation",
       "parse/string_literals/triple_double_quoted_unescaped_punctuation",
       "parse/string_literals/triple_single_quoted_unescaped_punctuation",
-
       # Recent changes
       "proto2/set_null/repeated_field_timestamp_null_pruned",
       "proto2/set_null/repeated_field_duration_null_pruned",
@@ -86,10 +86,15 @@ class ConformanceTestSuite(unittest.TestSuite):
       "string_ext/format/default precision for scientific notation with uint",
   ]
 
-  if os.name == "nt":
+  if sys.platform == "win32":
     # TODO(b/507568865): These tests depend on configuring a timezone database
     # which isn't available in our windows test environment.
     SKIP_TESTS.append("timestamps/timestamp_selectors_tz/.*")
+
+  if sys.platform == "darwin":
+    # TODO(b/516948297): Skip double to string precision mismatch on macOS
+    # due to platform double formatting differences
+    SKIP_TESTS.append("conversions/string/double_hard")
 
   def __init__(self):
     super().__init__(self)

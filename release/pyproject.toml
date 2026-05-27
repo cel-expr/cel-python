@@ -23,6 +23,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Operating System :: POSIX :: Linux",
   "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
 ]
 license = "Apache-2.0"
 readme = "README.md"
