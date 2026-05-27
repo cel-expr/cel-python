@@ -135,7 +135,10 @@ if !FETCH_STATUS! NEQ 0 (
     if !ERRORLEVEL! EQU 0 (
         if !ATTEMPTS! LSS %FETCH_RETRIES% (
             echo Fetch failed with timeout. Retrying in %FETCH_RETRY_DELAY_S% seconds...
-            timeout /t %FETCH_RETRY_DELAY_S% /nobreak >nul
+            :: Use ping instead of timeout because timeout command fails in non-interactive Kokoro environments
+            :: with "ERROR: Input redirection is not supported, exiting the process immediately."
+            set /a PINGS=%FETCH_RETRY_DELAY_S%+1
+            ping -n !PINGS! 127.0.0.1 >nul
             goto fetch_loop
         )
     )
