@@ -51,8 +51,7 @@ bazel_dep(name = "rules_python", version = "1.9.0")
 single_version_override(
     module_name = "antlr4-cpp-runtime",
     patch_cmds = [
-        "mv VERSION VERSION.txt || true",
-        "mv version version.txt || true",
+        "python3 -c \"import os; [os.rename(f, f + '.txt') for f in ['VERSION', 'version'] if os.path.exists(f)]\" || python -c \"import os; [os.rename(f, f + '.txt') for f in ['VERSION', 'version'] if os.path.exists(f)]\"",
     ],
 )
 
