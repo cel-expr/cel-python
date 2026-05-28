@@ -19,6 +19,8 @@ setlocal enabledelayedexpansion
 
 set "IN_PRESUBMIT=1"
 set "PRESUBMIT_STATUS=0"
+set "FETCH_RETRIES=10"
+set "FETCH_RETRY_DELAY_S=10"
 if "%PYTHON_VERSIONS%" == "" (
     set "PYTHON_VERSIONS=3.11"
 )
@@ -53,18 +55,18 @@ for %%V in (%PYTHON_VERSIONS%) do (
     set ATTEMPTS=0
     :fetch_loop
     set /a ATTEMPTS+=1
-    echo Fetch attempt !ATTEMPTS! of %FETCH_RETRIES%...
+    echo Fetch attempt !ATTEMPTS! of !FETCH_RETRIES!...
     bazel %STARTUP_FLAGS% fetch //... > fetch.log 2>&1
     set FETCH_STATUS=!ERRORLEVEL!
     type fetch.log
     if !FETCH_STATUS! NEQ 0 (
         findstr /i "timeout timed" fetch.log >nul
         if !ERRORLEVEL! EQU 0 (
-            if !ATTEMPTS! LSS %FETCH_RETRIES% (
-                echo Fetch failed with timeout. Retrying in %FETCH_RETRY_DELAY_S% seconds...
+            if !ATTEMPTS! LSS !FETCH_RETRIES! (
+                echo Fetch failed with timeout. Retrying in !FETCH_RETRY_DELAY_S! seconds...
                 :: Use ping instead of timeout because timeout command fails in non-interactive Kokoro environments
                 :: with "ERROR: Input redirection is not supported, exiting the process immediately."
-                set /a PINGS=%FETCH_RETRY_DELAY_S%+1
+                set /a PINGS=!FETCH_RETRY_DELAY_S!+1
                 ping -n !PINGS! 127.0.0.1 >nul
                 goto fetch_loop
             )
