@@ -2,14 +2,6 @@
 
 This is a Python wrapper for the CEL C++ implementation.
 
-## Installation
-
-```
-pip install cel-expr-python
-```
-
-Available on PyPI: https://pypi.org/project/cel-expr-python
-
 ## Usage
 
 ### Importing CEL module

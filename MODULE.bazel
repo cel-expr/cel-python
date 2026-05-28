@@ -50,9 +50,7 @@ bazel_dep(name = "rules_python", version = "1.9.0")
 # antlr4-cpp-runtime/VERSION and the system `#include <version>`
 single_version_override(
     module_name = "antlr4-cpp-runtime",
-    patch_cmds = [
-        "python3 -c \"import os; [os.rename(f, f + '.txt') for f in ['VERSION', 'version'] if os.path.exists(f)]\" || python -c \"import os; [os.rename(f, f + '.txt') for f in ['VERSION', 'version'] if os.path.exists(f)]\"",
-    ],
+    patches = ["//bazel:antlr.patch"],
 )
 
 # Configure rules_python's hermetic toolchains to resolve external
