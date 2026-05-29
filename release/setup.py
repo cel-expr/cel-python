@@ -116,6 +116,8 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
 
   def platform_config_windows(self, cmd, python_version):
     """Applies Windows-specific Bazel workarounds for Hermetic Python."""
+    cmd.insert(1, '--output_user_root=C:/tmp')
+
     # 1. Get output base
     output_base = subprocess.check_output(
         ['bazel', '--output_user_root=C:/tmp', 'info', 'output_base'], text=True
