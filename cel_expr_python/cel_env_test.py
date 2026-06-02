@@ -74,17 +74,14 @@ class CelEnvTest(absltest.TestCase):
           - name: "_+_"
       variables:
         - name: "one"
-          type_name: "int"
+          type: "int"
           value: 1
       functions:
         - name: "add"
           overloads:
             - id: "add_int_int"
-              args:
-                - type_name: "int"
-                - type_name: "int"
-              return:
-                type_name: "int"
+              signature: "add(int,int)"
+              return: "int"
     """),
     )
 
@@ -139,9 +136,9 @@ class CelEnvTest(absltest.TestCase):
                 qualified_name: "x.y.bar"
           variables:
             - name: "x.y.bar"
-              type_name: "string"
+              type: "string"
             - name: "x.y.foo"
-              type_name: "int"
+              type: "int"
         """),
     )
 
@@ -219,13 +216,13 @@ class CelEnvTest(absltest.TestCase):
                 qualified_name: "a.b.qux"
           variables:
             - name: "a.b.baz"
-              type_name: "int"
+              type: "int"
             - name: "a.b.qux"
-              type_name: "string"
+              type: "string"
             - name: "x.y.bar"
-              type_name: "string"
+              type: "string"
             - name: "x.y.foo"
-              type_name: "int"
+              type: "int"
         """),
     )
 
@@ -275,48 +272,35 @@ class CelEnvTest(absltest.TestCase):
         normalize_yaml("""
           variables:
             - name: "var_bool"
-              type_name: "bool"
+              type: "bool"
             - name: "var_bytes"
-              type_name: "bytes"
+              type: "bytes"
             - name: "var_double"
-              type_name: "double"
+              type: "double"
             - name: "var_duration"
-              type_name: "duration"
+              type: "duration"
             - name: "var_dyn"
-              type_name: "dyn"
+              type: "dyn"
             - name: "var_dyn_list"
-              type_name: "list"
-              params:
-                - type_name: "dyn"
+              type: "list<dyn>"
             - name: "var_dyn_map"
-              type_name: "map"
-              params:
-                - type_name: "dyn"
-                - type_name: "dyn"
+              type: "map<dyn,dyn>"
             - name: "var_int"
-              type_name: "int"
+              type: "int"
             - name: "var_int_map"
-              type_name: "map"
-              params:
-                - type_name: "int"
-                - type_name: "string"
+              type: "map<int,string>"
             - name: "var_msg"
-              type_name: "cel.expr.conformance.proto2.TestAllTypes"
+              type: "cel.expr.conformance.proto2.TestAllTypes"
             - name: "var_str"
-              type_name: "string"
+              type: "string"
             - name: "var_string_list"
-              type_name: "list"
-              params:
-                - type_name: "string"
+              type: "list<string>"
             - name: "var_string_map"
-              type_name: "map"
-              params:
-                - type_name: "string"
-                - type_name: "bool"
+              type: "map<string,bool>"
             - name: "var_timestamp"
-              type_name: "timestamp"
+              type: "timestamp"
             - name: "var_uint"
-              type_name: "uint"
+              type: "uint"
       """),
     )
 
@@ -338,9 +322,9 @@ class CelEnvTest(absltest.TestCase):
         normalize_yaml("""
           variables:
             - name: "var_bool"
-              type_name: "bool"
+              type: "bool"
             - name: "var_msg"
-              type_name: "cel.expr.conformance.proto2.TestAllTypes"
+              type: "cel.expr.conformance.proto2.TestAllTypes"
         """),
     )
 
@@ -554,18 +538,13 @@ class CelEnvTest(absltest.TestCase):
             - name: "hello"
               overloads:
                 - id: "good_time_of_day"
-                  args:
-                    - type_name: "string"
-                    - type_name: "string"
-                  return:
-                    type_name: "string"
+                  signature: "hello(string,string)"
+                  return: "string"
             - name: "is_ok"
               overloads:
                 - id: "is_ok_string"
-                  target:
-                    type_name: "string"
-                  return:
-                    type_name: "bool"
+                  signature: "string.is_ok()"
+                  return: "bool"
         """),
     )
     res: cel.Value = env.compile("hello('am', 'Sunshine')").eval()
