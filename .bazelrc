@@ -32,3 +32,7 @@ build:windows --google_default_credentials=true
 build:macos --remote_cache=https://storage.googleapis.com/macos-cel-python-remote-cache
 build:macos --google_default_credentials=true
 
+# Silence deprecation warnings from external dependencies (Linux and macOS)
+build:linux --cxxopt=-Wno-deprecated-declarations
+build:macos --cxxopt=-Wno-deprecated-declarations
+
