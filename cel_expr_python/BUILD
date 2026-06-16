@@ -9,46 +9,42 @@ licenses(["notice"])
 exports_files(["LICENSE"])
 
 # For Python programs using CEL.
-pybind_extension(
-    name = "cel",
+pybind_library(
+    name = "cel_pybind_lib",
     srcs = [
         "py_cel_activation.cc",
-        "py_cel_activation.h",
         "py_cel_arena.cc",
-        "py_cel_arena.h",
         "py_cel_env.cc",
-        "py_cel_env.h",
         "py_cel_env_config.cc",
-        "py_cel_env_config.h",
         "py_cel_env_internal.cc",
-        "py_cel_env_internal.h",
         "py_cel_expression.cc",
-        "py_cel_expression.h",
         "py_cel_function.cc",
-        "py_cel_function.h",
         "py_cel_function_decl.cc",
-        "py_cel_function_decl.h",
-        "py_cel_module.cc",
         "py_cel_overload.cc",
-        "py_cel_overload.h",
         "py_cel_python_extension.cc",
-        "py_cel_python_extension.h",
         "py_cel_type.cc",
-        "py_cel_type.h",
         "py_cel_value.cc",
+        "py_descriptor_database.cc",
+        "py_message_factory.cc",
+    ],
+    hdrs = [
+        "py_cel_activation.h",
+        "py_cel_arena.h",
+        "py_cel_env.h",
+        "py_cel_env_config.h",
+        "py_cel_env_internal.h",
+        "py_cel_expression.h",
+        "py_cel_function.h",
+        "py_cel_function_decl.h",
+        "py_cel_overload.h",
+        "py_cel_python_extension.h",
+        "py_cel_type.h",
         "py_cel_value.h",
         "py_cel_value_provider.h",
-        "py_descriptor_database.cc",
         "py_descriptor_database.h",
-        "py_error_status.cc",
-        "py_error_status.h",
-        "py_message_factory.cc",
         "py_message_factory.h",
     ],
-    data = ["cel.pyi"],
-    visibility = [
-        "//visibility:public",
-    ],
+    visibility = [":__subpackages__"],
     deps = [
         ":cel_extension",
         ":status_macros",
@@ -100,6 +96,20 @@ pybind_extension(
         "@com_google_cel_spec//proto/cel/expr:syntax_cc_proto",
         "@com_google_protobuf//:protobuf",
         "@pybind11_abseil//pybind11_abseil:absl_casters",
+    ],
+)
+
+pybind_extension(
+    name = "cel",
+    srcs = [
+        "py_cel_module.cc",
+    ],
+    data = ["cel.pyi"],
+    visibility = [
+        "//visibility:public",
+    ],
+    deps = [
+        ":cel_pybind_lib",
     ],
 )
 
