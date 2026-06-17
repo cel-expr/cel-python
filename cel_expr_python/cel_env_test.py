@@ -98,6 +98,52 @@ class CelEnvTest(absltest.TestCase):
         str(e.exception),
     )
 
+  def test_parse_context_variable_config(self):
+    config = cel.NewEnvConfigFromYaml("""
+      context_variable:
+        type_name: "cel.expr.conformance.proto2.TestAllTypes"
+    """)
+    self.assertEqual(
+        config.context_type, "cel.expr.conformance.proto2.TestAllTypes"
+    )
+
+  def test_parse_context_variable_config_alternative_syntax(self):
+    config = cel.NewEnvConfigFromYaml("""
+      context_variable:
+        type: "cel.expr.conformance.proto2.TestAllTypes"
+    """)
+    self.assertEqual(
+        config.context_type, "cel.expr.conformance.proto2.TestAllTypes"
+    )
+
+  def test_parse_context_variable_malformed(self):
+    with self.assertRaisesRegex(
+        Exception, "Node 'context_variable' is not a map"
+    ):
+      cel.NewEnvConfigFromYaml("context_variable: 123")
+
+  def test_parse_context_variable_malformed2(self):
+    with self.assertRaisesRegex(
+        Exception, "Node 'context_variable' does not have a valid type"
+    ):
+      cel.NewEnvConfigFromYaml("""
+        context_variable:
+          type:
+            foo: bar
+      """)
+
+  def test_context_variable_basic(self):
+    config = cel.NewEnvConfigFromYaml("""
+      context_variable:
+        type_name: "cel.expr.conformance.proto2.TestAllTypes"
+    """)
+    env = cel.NewEnv(config=config)
+    ast = env.compile("single_int32 > 10")
+    self.assertIsNotNone(ast)
+
+    with self.assertRaises(Exception):
+      env.compile("non_existent_field > 10")
+
   def test_config_export_container(self):
     env: cel.Env = cel.NewEnv(container="test.container")
     yaml: str = env.config().to_yaml()

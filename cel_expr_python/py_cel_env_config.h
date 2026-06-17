@@ -34,6 +34,7 @@ class PyCelEnvConfig {
   std::string ToYaml() const;
 
   const cel::Config& GetConfig() const { return config_; }
+  std::string GetContextType() const { return config_.GetContextType(); }
 
  private:
   cel::Config config_;
