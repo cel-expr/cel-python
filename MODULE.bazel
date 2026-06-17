@@ -15,8 +15,8 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "cel-cpp", version = "0.15.0", repo_name = "com_google_cel_cpp")
 git_override(
     module_name = "cel-cpp",
-    commit = "2e6e9ff4493bfbe0baf883107f3fb7ce6f675d88",
-    remote = "https://github.com/google/cel-cpp",
+    commit = "8b7068abb4062074a135491ad8357139287084f9",
+    remote = "https://github.com/cel-expr/cel-cpp",
 )
 
 # https://registry.bazel.build/modules/cel-spec
@@ -45,13 +45,6 @@ bazel_dep(name = "rules_proto", version = "7.1.0")
 
 # https://registry.bazel.build/modules/rules_python
 bazel_dep(name = "rules_python", version = "1.9.0")
-
-# On Windows the file system is case-insensitive, which creates a collision between
-# antlr4-cpp-runtime/VERSION and the system `#include <version>`
-single_version_override(
-    module_name = "antlr4-cpp-runtime",
-    patches = ["//bazel:antlr.patch"],
-)
 
 # Configure rules_python's hermetic toolchains to resolve external
 # dependencies natively. Under Windows, compiling pybind C++ extensions

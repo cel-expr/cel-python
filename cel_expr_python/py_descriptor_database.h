@@ -19,6 +19,8 @@
 
 #include <Python.h>  // IWYU pragma: keep - Needed for PyObject
 
+#include <string_view>  // IWYU pragma: keep - Needed for string_view in OSS
+
 #include "google/protobuf/descriptor.pb.h"
 #include "google/protobuf/descriptor_database.h"
 
@@ -27,7 +29,7 @@ namespace cel_python {
 // A DescriptorDatabase that uses a Python DescriptorPool to find descriptors.
 class PyDescriptorDatabase : public google::protobuf::DescriptorDatabase {
  private:
-  using StringViewArg = const std::string&;
+  using StringViewArg = std::string_view;
  public:
   explicit PyDescriptorDatabase(PyObject* py_descriptor_pool);
   ~PyDescriptorDatabase() override;
