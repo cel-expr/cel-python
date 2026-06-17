@@ -33,6 +33,8 @@ void PyCelEnvConfig::DefinePythonBindings(pybind11::module& m) {
   m.def("NewEnvConfigFromYaml", &PyCelEnvConfig::FromYaml, py::arg("yaml"));
 
   cel_class.def("to_yaml", &PyCelEnvConfig::ToYaml);
+  cel_class.def_property_readonly("context_type",
+                                  &PyCelEnvConfig::GetContextType);
 }
 
 PyCelEnvConfig PyCelEnvConfig::FromYaml(std::string yaml) {
