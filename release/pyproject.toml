@@ -54,7 +54,9 @@ container-engine = "docker; disable_host_mount: True"
 before-all = "git config --global http.sslVerify false && echo 'Installing bazelisk' && cp {project}/bazelisk-linux-amd64 /usr/local/bin/bazel"
 
 [tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
 before-all = "echo 'Installing bazelisk'; brew install bazelisk"
+environment = { MACOSX_DEPLOYMENT_TARGET = "10.13" }
 
 [tool.cibuildwheel.windows]
 # Bazel is expected to be already installed and in the PATH on Windows.

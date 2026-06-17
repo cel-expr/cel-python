@@ -16,6 +16,7 @@
 
 import glob
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -161,7 +162,31 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
 
   def platform_config_macos(self, cmd):
     """Applies macOS-specific Bazel configurations."""
-    cmd.extend(['--macos_minimum_os=10.13', '--cxxopt=-faligned-allocation'])
+    deployment_target = os.environ.get('MACOSX_DEPLOYMENT_TARGET', '10.13')
+    cmd.extend([
+        f'--macos_minimum_os={deployment_target}',
+        '--cxxopt=-faligned-allocation',
+    ])
+
+    archflags = os.environ.get('ARCHFLAGS', '')
+    if 'x86_64' in archflags:
+      target_arch = 'x86_64'
+    elif 'arm64' in archflags:
+      target_arch = 'arm64'
+    else:
+      machine = platform.machine()
+      if machine in ('AMD64', 'x86_64'):
+        target_arch = 'x86_64'
+      elif machine in ('arm64', 'aarch64'):
+        target_arch = 'arm64'
+      else:
+        target_arch = machine
+
+    print(f'Target architecture for macOS: {target_arch}', flush=True)
+    cmd.append(f'--macos_cpus={target_arch}')
+    cmd.append(f'--cpu=darwin_{target_arch}')
+    if target_arch == 'x86_64':
+      cmd.append('--platforms=//cel_expr_python:macos_x86_64')
 
 
 setuptools.setup(

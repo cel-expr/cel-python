@@ -187,3 +187,15 @@ py_test(
         ],
     }),
 )
+
+# Platform definition for macOS x86_64.
+# Used for cross-compiling from arm64 macOS hosts (Apple Silicon) to x86_64.
+# This is passed to Bazel via --platforms in setup.py when building x86_64 wheels.
+platform(
+    name = "macos_x86_64",
+    constraint_values = [
+        "@platforms//os:osx",
+        "@platforms//cpu:x86_64",
+    ],
+    visibility = ["//visibility:public"],
+)
