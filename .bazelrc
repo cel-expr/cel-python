@@ -2,6 +2,10 @@
 # This allows Bazel to automatically pick up the `windows` config on Windows.
 common --enable_platform_specific_config
 
+# Prevent rules_android (pulled in transitively) from attempting to configure an Android SDK repository
+# using the preinstalled Android SDK on CI machines (e.g. Kokoro Windows), which fails build tools version checks.
+common --repo_env=ANDROID_HOME=
+
 # Disable automatic creation of `__init__.py` files, which prevent multiple
 # workspaces from providing files with the same package prefix (e.g., "cel").
 # See https://github.com/bazelbuild/rules_python/issues/330.

@@ -56,7 +56,7 @@ for %%V in (%PYTHON_VERSIONS%) do (
     :fetch_loop
     set /a ATTEMPTS+=1
     echo Fetch attempt !ATTEMPTS! of !FETCH_RETRIES!...
-    bazel %STARTUP_FLAGS% fetch //... > fetch.log 2>&1
+    bazel !STARTUP_FLAGS! fetch //... > fetch.log 2>&1
     set FETCH_STATUS=!ERRORLEVEL!
     type fetch.log
     if !FETCH_STATUS! NEQ 0 (
@@ -78,7 +78,7 @@ for %%V in (%PYTHON_VERSIONS%) do (
     if exist fetch.log del fetch.log
 
     echo --- Getting Output Base ---
-    for /f "tokens=*" %%i in ('bazel %STARTUP_FLAGS% info output_base') do set "OUTPUT_BASE=%%i"
+    for /f "tokens=*" %%i in ('bazel !STARTUP_FLAGS! info output_base') do set "OUTPUT_BASE=%%i"
     set "OUTPUT_BASE=!OUTPUT_BASE:/=\!"
     echo Output Base: !OUTPUT_BASE!
 
@@ -99,7 +99,7 @@ for %%V in (%PYTHON_VERSIONS%) do (
     )
 
     echo --- Bazel Build ---
-    bazel %STARTUP_FLAGS% build %LINK_FLAGS% //...
+    bazel !STARTUP_FLAGS! build !LINK_FLAGS! //...
     if !ERRORLEVEL! NEQ 0 (
         echo Build failed!
         set "PRESUBMIT_STATUS=1"
@@ -107,7 +107,7 @@ for %%V in (%PYTHON_VERSIONS%) do (
     )
 
     echo --- Bazel Test Python %%V ---
-    bazel %STARTUP_FLAGS% test %LINK_FLAGS% --test_output=errors //...
+    bazel !STARTUP_FLAGS! test !LINK_FLAGS! --test_output=errors //...
     if !ERRORLEVEL! NEQ 0 (
         echo Tests failed for Python %%V!
         set "PRESUBMIT_STATUS=1"
