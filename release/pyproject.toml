@@ -38,20 +38,26 @@ where = ["."]
 exclude = ["codelab*", "conformance*", "custom_ext*", "release*", "testing*", "wheelhouse*"]
 
 [tool.cibuildwheel]
-build = "cp311-* cp312-* cp313-* cp314-*"
+#build = "cp311-* cp312-* cp313-* cp314-*"
+build = "cp311-*"
 skip = "*musllinux* *win32* *i686*"
 test-command = "python {project}/cel_basic_test.py"
 build-verbosity = 1
 
 [tool.cibuildwheel.linux]
-manylinux-x86_64-image = "manylinux_2_28"
+build-frontend = { name = "pip", args = ["--no-build-isolation"] }
+before-build = "pip install --no-index --find-links={project}/build_deps setuptools wheel virtualenv"
+#archs = ["x86_64", "aarch64"]
+archs = ["aarch64"]
+#manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
 container-engine = "docker; disable_host_mount: True"
 # Google's internal Kokoro/RBE network uses a secure MITM proxy that resigns HTTPS
 # traffic with an internal Google CA. Since the public manylinux container does not
 # trust this CA, git fetches for external dependencies (like @cel-cpp) will fail
 # with SSL certificate errors. We disable http.sslVerify inside the container to
 # bypass this and allow Bazel to fetch SCM dependencies through the proxy.
-before-all = "git config --global http.sslVerify false && echo 'Installing bazelisk' && cp {project}/bazelisk-linux-amd64 /usr/local/bin/bazel"
+before-all = "git config --global http.sslVerify false && echo 'Installing bazelisk' && if [ $(uname -m) = 'aarch64' ]; then cp {project}/bazelisk-linux-arm64 /usr/local/bin/bazel; else cp {project}/bazelisk-linux-amd64 /usr/local/bin/bazel; fi && python3 -m pip install --no-index --find-links={project}/build_deps virtualenv"
 
 [tool.cibuildwheel.macos]
 archs = ["x86_64", "arm64"]

@@ -20,7 +20,7 @@ export VIRTUALENV_NO_DOWNLOAD=1
 export PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Pass these environment variables to the cibuildwheel Docker container
-export CIBW_ENVIRONMENT="VIRTUALENV_NO_DOWNLOAD=1 PIP_DISABLE_PIP_VERSION_CHECK=1"
+export CIBW_ENVIRONMENT="VIRTUALENV_NO_DOWNLOAD=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_DEFAULT_TIMEOUT=120"
 export CIBW_DEPENDENCY_VERSIONS="latest"
 export CIBW_CONTAINER_ENGINE_EXTRA_ARGS="--network=host"
 
@@ -203,12 +203,22 @@ rm -rf cel_expr_python/*_test.py
 
 echo "Downloading bazelisk on host..."
 curl -LO https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64
-chmod +x bazelisk-linux-amd64
+curl -LO https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-arm64
+chmod +x bazelisk-linux-amd64 bazelisk-linux-arm64
+
+echo "Downloading build dependencies on host..."
+mkdir -p build_deps
+pip download --only-binary=:all: --dest build_deps "setuptools>=40.8.0" "wheel"
+pip download --only-binary=:all: --dest build_deps --python-version 3.9 --platform manylinux2014_x86_64 "virtualenv"
 
 # Check if pyproject.toml exists before running sed
 if [ -f pyproject.toml ]; then
   sed -i "" "s/\$VERSION/${VERSION}/g" pyproject.toml || sed -i "s/\$VERSION/${VERSION}/g" pyproject.toml
 fi
+
+# Register QEMU for arm64 emulation
+echo "Registering QEMU binfmt handlers..."
+docker run --privileged --rm mirror.gcr.io/tonistiigi/binfmt --install arm64
 
 echo "Running cibuildwheel..."
 # Default CIBWHEEL_BIN if not set
