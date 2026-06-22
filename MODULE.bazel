@@ -15,7 +15,7 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "cel-cpp", version = "0.15.0", repo_name = "com_google_cel_cpp")
 git_override(
     module_name = "cel-cpp",
-    commit = "8b7068abb4062074a135491ad8357139287084f9",
+    commit = "76ae0b3c1768d93a10270f904101de338867bdb1",
     remote = "https://github.com/cel-expr/cel-cpp",
 )
 
