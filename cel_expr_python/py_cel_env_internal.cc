@@ -202,11 +202,11 @@ PyCelEnvInternal::NewCelEnvInternal(
       if (overload.py_function().is_none()) {
         continue;
       }
-      if (!impls.insert({overload.overload_id(), overload.py_function()})
-               .second) {
+      std::string overload_id = overload.overload_id();
+      if (!impls.insert({overload_id, overload.py_function()}).second) {
         return absl::AlreadyExistsError(
-            absl::StrCat("An implementation for function overload id '",
-                         overload.overload_id(), "' already exists."));
+            absl::StrCat("An implementation for function overload '",
+                         overload_id, "' already exists."));
       }
     }
   }
@@ -214,8 +214,8 @@ PyCelEnvInternal::NewCelEnvInternal(
   for (const auto& [overload_id, py_function] : function_impls) {
     if (!impls.insert({overload_id, py_function}).second) {
       return absl::AlreadyExistsError(
-          absl::StrCat("An implementation for function overload id '",
-                       overload_id, "' already exists."));
+          absl::StrCat("An implementation for function overload '", overload_id,
+                       "' already exists."));
     }
   }
   return std::shared_ptr<PyCelEnvInternal>(

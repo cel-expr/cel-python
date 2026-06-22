@@ -668,6 +668,18 @@ class CelTest(absltest.TestCase):
         res.value(), cel.Type.INT
     )  # This behavior is counterintuitive but works as implemented.
 
+  def testTypeInitSignature(self):
+    self.assertEqual(cel.Type("int"), cel.Type.INT)
+    self.assertEqual(cel.Type("list<int>"), cel.Type.List(cel.Type.INT))
+    self.assertEqual(
+        cel.Type("map<string, dyn>"),
+        cel.Type.Map(cel.Type.STRING, cel.Type.DYN),
+    )
+    self.assertEqual(
+        cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+        cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+    )
+
   def testCelExpressionPersistence_checkedExpr(self):
     expr: cel.Expression = self.env.compile("var_msg.single_string")
     as_bytes: bytes = expr.serialize()

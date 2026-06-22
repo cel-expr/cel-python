@@ -46,17 +46,13 @@ class CelEnvTest(absltest.TestCase):
         - name: math
       variables:
       - name: one
-        type_name: int
+        type: int
         value: 1
       functions:
         - name: add
           overloads:
-            - id: "add_int_int"
-              args:
-              - type_name: int
-              - type_name: int
-              return:
-                type_name: int
+            - signature: "add(int,int)"
+              return: int
     """)
     yaml: str = config.to_yaml()
     self.assertEqual(
@@ -74,17 +70,13 @@ class CelEnvTest(absltest.TestCase):
           - name: "_+_"
       variables:
         - name: "one"
-          type_name: "int"
+          type: "int"
           value: 1
       functions:
         - name: "add"
           overloads:
-            - id: "add_int_int"
-              args:
-                - type_name: "int"
-                - type_name: "int"
-              return:
-                type_name: "int"
+            - signature: "add(int,int)"
+              return: "int"
     """),
     )
 
@@ -185,9 +177,9 @@ class CelEnvTest(absltest.TestCase):
                 qualified_name: "x.y.bar"
           variables:
             - name: "x.y.bar"
-              type_name: "string"
+              type: "string"
             - name: "x.y.foo"
-              type_name: "int"
+              type: "int"
         """),
     )
 
@@ -202,9 +194,9 @@ class CelEnvTest(absltest.TestCase):
               qualified_name: "x.y.bar"
         variables:
           - name: "x.y.bar"
-            type_name: "string"
+            type: "string"
           - name: "x.y.foo"
-            type_name: "int"
+            type: "int"
       """))
 
     res = env.compile("foo").eval(data={"x.y.foo": 42})
@@ -224,13 +216,13 @@ class CelEnvTest(absltest.TestCase):
                 qualified_name: "x.y.bar"
           variables:
             - name: "x.y.bar"
-              type_name: "string"
+              type: "string"
             - name: "x.y.foo"
-              type_name: "int"
+              type: "int"
             - name: "a.b.qux"
-              type_name: "string"
+              type: "string"
             - name: "a.b.baz"
-              type_name: "int"
+              type: "int"
         """),
         container=cel.ExpressionContainer(
             "test.container",
@@ -265,13 +257,13 @@ class CelEnvTest(absltest.TestCase):
                 qualified_name: "a.b.qux"
           variables:
             - name: "a.b.baz"
-              type_name: "int"
+              type: "int"
             - name: "a.b.qux"
-              type_name: "string"
+              type: "string"
             - name: "x.y.bar"
-              type_name: "string"
+              type: "string"
             - name: "x.y.foo"
-              type_name: "int"
+              type: "int"
         """),
     )
 
@@ -321,48 +313,35 @@ class CelEnvTest(absltest.TestCase):
         normalize_yaml("""
           variables:
             - name: "var_bool"
-              type_name: "bool"
+              type: "bool"
             - name: "var_bytes"
-              type_name: "bytes"
+              type: "bytes"
             - name: "var_double"
-              type_name: "double"
+              type: "double"
             - name: "var_duration"
-              type_name: "duration"
+              type: "duration"
             - name: "var_dyn"
-              type_name: "dyn"
+              type: "dyn"
             - name: "var_dyn_list"
-              type_name: "list"
-              params:
-                - type_name: "dyn"
+              type: "list<dyn>"
             - name: "var_dyn_map"
-              type_name: "map"
-              params:
-                - type_name: "dyn"
-                - type_name: "dyn"
+              type: "map<dyn,dyn>"
             - name: "var_int"
-              type_name: "int"
+              type: "int"
             - name: "var_int_map"
-              type_name: "map"
-              params:
-                - type_name: "int"
-                - type_name: "string"
+              type: "map<int,string>"
             - name: "var_msg"
-              type_name: "cel.expr.conformance.proto2.TestAllTypes"
+              type: "cel.expr.conformance.proto2.TestAllTypes"
             - name: "var_str"
-              type_name: "string"
+              type: "string"
             - name: "var_string_list"
-              type_name: "list"
-              params:
-                - type_name: "string"
+              type: "list<string>"
             - name: "var_string_map"
-              type_name: "map"
-              params:
-                - type_name: "string"
-                - type_name: "bool"
+              type: "map<string,bool>"
             - name: "var_timestamp"
-              type_name: "timestamp"
+              type: "timestamp"
             - name: "var_uint"
-              type_name: "uint"
+              type: "uint"
       """),
     )
 
@@ -370,7 +349,7 @@ class CelEnvTest(absltest.TestCase):
     config = cel.NewEnvConfigFromYaml("""
       variables:
         - name: "var_bool"
-          type_name: "bool"
+          type: "bool"
       """)
     env: cel.Env = cel.NewEnv(
         config=config,
@@ -384,9 +363,9 @@ class CelEnvTest(absltest.TestCase):
         normalize_yaml("""
           variables:
             - name: "var_bool"
-              type_name: "bool"
+              type: "bool"
             - name: "var_msg"
-              type_name: "cel.expr.conformance.proto2.TestAllTypes"
+              type: "cel.expr.conformance.proto2.TestAllTypes"
         """),
     )
 
@@ -394,7 +373,7 @@ class CelEnvTest(absltest.TestCase):
     config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       variables:
         - name: "var_bool"
-          type_name: "bool"
+          type: "bool"
       """)
 
     with self.assertRaises(Exception) as e:
@@ -413,9 +392,9 @@ class CelEnvTest(absltest.TestCase):
     config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       variables:
         - name: "var_bool"
-          type_name: "bool"
+          type: "bool"
         - name: "var_int"
-          type_name: "int"
+          type: "int"
           value: 42
       """)
     env: cel.Env = cel.NewEnv(
@@ -560,6 +539,105 @@ class CelEnvTest(absltest.TestCase):
       functions:
         - name: is_ok
           overloads:
+            - signature: "string.is_ok()"
+              return: "bool"
+      """)
+    env: cel.Env = cel.NewEnv(
+        config=config,
+        functions=[
+            cel.FunctionDecl(
+                "hello",
+                [
+                    cel.Overload(
+                        signature="hello(string,string)",
+                        return_type=cel.Type.STRING,
+                        impl=lambda ampm, arg: (
+                            "Good"
+                            f" {'morning' if ampm == 'am' else 'afternoon'},"
+                            f" {arg}!"
+                        ),
+                    )
+                ],
+            )
+        ],
+        function_impls={
+            "string.is_ok()": lambda arg: arg in ["excellent", "good", "fair"],
+        },
+    )
+    yaml = env.config().to_yaml()
+    self.assertEqual(
+        normalize_yaml(yaml),
+        normalize_yaml("""
+          functions:
+            - name: "hello"
+              overloads:
+                - signature: "hello(string,string)"
+                  return: "string"
+            - name: "is_ok"
+              overloads:
+                - signature: "string.is_ok()"
+                  return: "bool"
+        """),
+    )
+    res: cel.Value = env.compile("hello('am', 'Sunshine')").eval()
+    self.assertEqual(res.value(), "Good morning, Sunshine!")
+    res = env.compile("hello('pm', 'tea is served')").eval()
+    self.assertEqual(res.value(), "Good afternoon, tea is served!")
+    res = env.compile("'good'.is_ok()").eval()
+    self.assertTrue(res.value())
+    res = env.compile("'bad'.is_ok()").eval()
+    self.assertFalse(res.value())
+
+  def test_config_function_override(self):
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
+      functions:
+        - name: foo
+          overloads:
+            - signature: "foo()"
+      """)
+    with self.assertRaises(Exception) as e:
+      cel.NewEnv(
+          config=config,
+          functions=[
+              cel.FunctionDecl(
+                  "foo",
+                  [
+                      cel.Overload(
+                          signature="foo()",
+                          impl=lambda: "hello",
+                      )
+                  ],
+              )
+          ],
+          function_impls={
+              "foo()": lambda: "goodbye",
+          },
+      )
+    self.assertIn(
+        "An implementation for function overload 'foo()' already exists.",
+        str(e.exception),
+    )
+
+  def test_overload_signature_errors(self):
+    with self.assertRaises(ValueError) as e2:
+      cel.Overload(signature="greet(string)", parameters=[cel.Type.STRING])
+    self.assertIn(
+        "If 'signature' is specified, 'parameters' should not be specified",
+        str(e2.exception),
+    )
+
+    with self.assertRaises(ValueError) as e3:
+      cel.Overload()
+    self.assertIn(
+        "Either 'id' or 'signature' must be specified", str(e3.exception)
+    )
+
+  def test_config_functions_deprecated_syntax(self):
+    """Test that the deprecated function syntax is still supported."""
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
+      functions:
+        - name: is_ok
+          overloads:
             - id: "is_ok_string"
               target:
                 type_name: string
@@ -600,18 +678,13 @@ class CelEnvTest(absltest.TestCase):
             - name: "hello"
               overloads:
                 - id: "good_time_of_day"
-                  args:
-                    - type_name: "string"
-                    - type_name: "string"
-                  return:
-                    type_name: "string"
+                  signature: "hello(string,string)"
+                  return: "string"
             - name: "is_ok"
               overloads:
                 - id: "is_ok_string"
-                  target:
-                    type_name: "string"
-                  return:
-                    type_name: "bool"
+                  signature: "string.is_ok()"
+                  return: "bool"
         """),
     )
     res: cel.Value = env.compile("hello('am', 'Sunshine')").eval()
@@ -622,37 +695,6 @@ class CelEnvTest(absltest.TestCase):
     self.assertTrue(res.value())
     res = env.compile("'bad'.is_ok()").eval()
     self.assertFalse(res.value())
-
-  def test_config_function_override(self):
-    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
-      functions:
-        - name: foo
-          overloads:
-            - id: "unique_id"
-      """)
-    with self.assertRaises(Exception) as e:
-      cel.NewEnv(
-          config=config,
-          functions=[
-              cel.FunctionDecl(
-                  "bar",
-                  [
-                      cel.Overload(
-                          "unique_id",
-                          impl=lambda: "hello",
-                      )
-                  ],
-              )
-          ],
-          function_impls={
-              "unique_id": lambda: "goodbye",
-          },
-      )
-    self.assertIn(
-        "An implementation for function overload id 'unique_id' already"
-        " exists.",
-        str(e.exception),
-    )
 
 
 class TestCelExtension(cel.CelExtension):

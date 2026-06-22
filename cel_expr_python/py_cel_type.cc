@@ -30,6 +30,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "common/kind.h"
+#include "common/signature.h"
 #include "common/type.h"
 #include "common/type_kind.h"
 #include "common/types/list_type.h"
@@ -37,6 +38,7 @@
 #include "common/value.h"
 #include "common/value_kind.h"
 #include "env/config.h"
+#include "env/type_info.h"
 #include "cel_expr_python/py_error_status.h"
 #include "cel_expr_python/status_macros.h"
 #include "google/protobuf/arena.h"
@@ -50,7 +52,14 @@ namespace py = ::pybind11;
 
 void PyCelType::DefinePythonBindings(py::module& m) {
   py::class_<PyCelType> type(m, "Type");
-  type.def(py::init<const std::string&>(), py::arg("name"))
+  type.def(py::init([](const std::string& signature) {
+             cel::TypeSpec type_spec =
+                 ThrowIfError(cel::ParseTypeSpec(signature));
+             cel::Config::TypeInfo type_info =
+                 ThrowIfError(cel::TypeSpecToTypeInfo(type_spec));
+             return PyCelType::FromTypeInfo(type_info);
+           }),
+           py::arg("signature"))
       .def("name", &PyCelType::GetName)
       .def("is_message", &PyCelType::IsMessage)
       .def("is_assignable_from", &PyCelType::IsAssignableFrom)
@@ -524,6 +533,47 @@ PyCelType PyCelType::FromTypeProto(const cel::expr::Type& type) {
       break;
   }
   return PyCelType::Error();
+}
+
+PyCelType PyCelType::FromTypeInfo(const cel::Config::TypeInfo& type_info) {
+  if (type_info.name == "null") return PyCelType::Null();
+  if (type_info.name == "bool") return PyCelType::Bool();
+  if (type_info.name == "int") return PyCelType::Int();
+  if (type_info.name == "uint") return PyCelType::Uint();
+  if (type_info.name == "double") return PyCelType::Double();
+  if (type_info.name == "string") return PyCelType::String();
+  if (type_info.name == "bytes") return PyCelType::Bytes();
+  if (type_info.name == "timestamp") return PyCelType::Timestamp();
+  if (type_info.name == "duration") return PyCelType::Duration();
+  if (type_info.name == "dyn") return PyCelType::Dyn();
+  if (type_info.name == "list") {
+    if (type_info.params.empty()) {
+      return PyCelType::List();
+    }
+    return PyCelType::ListType(FromTypeInfo(type_info.params[0]));
+  }
+  if (type_info.name == "map") {
+    if (type_info.params.size() < 2) {
+      return PyCelType::Map();
+    }
+    return PyCelType::MapType(FromTypeInfo(type_info.params[0]),
+                              FromTypeInfo(type_info.params[1]));
+  }
+  if (type_info.name == "type") {
+    if (type_info.params.empty()) {
+      return PyCelType::Type();
+    }
+    return PyCelType::TypeType(FromTypeInfo(type_info.params[0]));
+  }
+  if (type_info.is_type_param || !type_info.params.empty()) {
+    std::vector<PyCelType> params;
+    params.reserve(type_info.params.size());
+    for (const auto& param : type_info.params) {
+      params.push_back(FromTypeInfo(param));
+    }
+    return PyCelType::AbstractType(type_info.name, params);
+  }
+  return PyCelType(type_info.name);
 }
 
 absl::StatusOr<cel::Type> PyCelType::ToCelType(

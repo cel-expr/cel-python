@@ -77,6 +77,7 @@ class PyCelType {
   static PyCelType ForCelValue(const cel::Value& cel_value);
   static PyCelType FromCelType(const cel::Type& cel_type);
   static PyCelType FromTypeProto(const cel::expr::Type& type);
+  static PyCelType FromTypeInfo(const cel::Config::TypeInfo& type_info);
   static absl::StatusOr<cel::Type> ToCelType(
       const PyCelType& type, google::protobuf::Arena* arena,
       const google::protobuf::DescriptorPool& descriptor_pool);

@@ -30,7 +30,7 @@ class PyCelEnvConfig {
   PyCelEnvConfig() = default;
   explicit PyCelEnvConfig(const cel::Config& config) : config_(config) {}
 
-  static PyCelEnvConfig FromYaml(std::string yaml);
+  static PyCelEnvConfig FromYaml(const std::string& yaml);
   std::string ToYaml() const;
 
   const cel::Config& GetConfig() const { return config_; }

@@ -188,14 +188,11 @@ def exercise5():
                       "containsKeyValue",
                       [
                           cel.Overload(
-                              "contains_key_value",
+                              signature=(
+                                  "map<string, dyn>.containsKeyValue(string,"
+                                  " dyn)"
+                              ),
                               return_type=cel.Type.BOOL,
-                              parameters=[
-                                  cel.Type.Map(cel.Type.STRING, cel.Type.DYN),
-                                  cel.Type.STRING,
-                                  cel.Type.DYN,
-                              ],
-                              is_member=True,
                               impl=contains_key_value,
                           )
                       ],
@@ -323,7 +320,7 @@ def exercise7():
       # Add variable definitions for 'jwt' as a map(string, Dyn) type
       # and for 'now' as a timestamp.
       variables={
-          "jwt": cel.Type.Map(cel.Type.STRING, cel.Type.DYN),
+          "jwt": cel.Type("map<string, dyn>"),
           "now": cel.Type.TIMESTAMP,
       },
   )

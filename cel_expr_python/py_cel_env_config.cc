@@ -37,7 +37,7 @@ void PyCelEnvConfig::DefinePythonBindings(pybind11::module& m) {
                                   &PyCelEnvConfig::GetContextType);
 }
 
-PyCelEnvConfig PyCelEnvConfig::FromYaml(std::string yaml) {
+PyCelEnvConfig PyCelEnvConfig::FromYaml(const std::string& yaml) {
   PyCelEnvConfig config;
   config.config_ = ThrowIfError(cel::EnvConfigFromYaml(yaml));
   return config;
@@ -45,7 +45,7 @@ PyCelEnvConfig PyCelEnvConfig::FromYaml(std::string yaml) {
 
 std::string PyCelEnvConfig::ToYaml() const {
   std::stringstream ss;
-  cel::EnvConfigToYaml(config_, ss);
+  cel::EnvConfigToYaml(config_, ss, {.use_type_signatures = true});
   return ss.str();
 }
 

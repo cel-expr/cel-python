@@ -70,6 +70,7 @@ pybind_library(
         "@com_google_cel_cpp//common:function_descriptor",
         "@com_google_cel_cpp//common:kind",
         "@com_google_cel_cpp//common:minimal_descriptor_pool",
+        "@com_google_cel_cpp//common:signature",
         "@com_google_cel_cpp//common:source",
         "@com_google_cel_cpp//common:type",
         "@com_google_cel_cpp//common:type_kind",

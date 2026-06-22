@@ -20,8 +20,11 @@
 #include <utility>
 #include <vector>
 
+#include "common/signature.h"
 #include "env/config.h"
+#include "env/type_info.h"
 #include "cel_expr_python/py_cel_type.h"
+#include "cel_expr_python/py_error_status.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -31,16 +34,47 @@ namespace py = ::pybind11;
 
 void PyCelOverload::DefinePythonBindings(py::module_& m) {
   py::class_<PyCelOverload, std::shared_ptr<PyCelOverload>>(m, "Overload")
-      .def(py::init([](const std::string& overload_id,
+      .def(py::init([](std::optional<std::string> id,
                        const PyCelType& return_type,
                        const std::vector<PyCelType>& parameters, bool is_member,
-                       py::object impl) {
-             return PyCelOverload(overload_id, return_type, parameters,
-                                  is_member, std::move(impl));
+                       py::object impl, std::optional<std::string> signature) {
+             if (signature.has_value()) {
+               if (!parameters.empty()) {
+                 throw py::value_error(
+                     "If 'signature' is specified, 'parameters' "
+                     "should not be specified");
+               }
+               cel::ParsedFunctionOverload parsed =
+                   ThrowIfError(cel::ParseFunctionSignature(*signature));
+               std::string overload_id =
+                   id.has_value() ? std::move(*id) : *signature;
+               std::vector<PyCelType> parsed_parameters;
+               if (parsed.signature_type.has_function()) {
+                 const auto& function_type_spec =
+                     parsed.signature_type.function();
+                 parsed_parameters.reserve(
+                     function_type_spec.arg_types().size());
+                 for (const auto& arg : function_type_spec.arg_types()) {
+                   parsed_parameters.push_back(PyCelType::FromTypeInfo(
+                       ThrowIfError(cel::TypeSpecToTypeInfo(arg))));
+                 }
+               }
+               return PyCelOverload(std::move(overload_id), return_type,
+                                    std::move(parsed_parameters),
+                                    parsed.is_member, std::move(impl));
+             }
+             if (id.has_value()) {
+               return PyCelOverload(std::move(*id), return_type, parameters,
+                                    is_member, std::move(impl));
+             }
+             throw py::value_error(
+                 "Either 'id' or 'signature' must be specified");
            }),
-           py::arg("overload_id"), py::arg("return_type") = PyCelType::Dyn(),
+           py::arg("id") = std::nullopt,
+           py::arg("return_type") = PyCelType::Dyn(),
            py::arg("parameters") = std::vector<PyCelType>{},
-           py::arg("is_member") = false, py::arg("impl") = py::none());
+           py::arg("is_member") = false, py::arg("impl") = py::none(),
+           py::arg("signature") = std::nullopt);
 }
 
 PyCelOverload::PyCelOverload(std::string overload_id,
