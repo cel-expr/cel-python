@@ -15,12 +15,42 @@
 
 set -e
 
+if ! command -v pip3 &> /dev/null || ! command -v curl &> /dev/null || ! command -v docker &> /dev/null; then
+  echo "Installing basic dependencies..."
+  apt-get update && apt-get install -y python3-pip curl
+
+  if ! command -v docker &> /dev/null; then
+    echo "Installing docker CLI..."
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "x86_64" ]; then
+      DOCKER_ARCH="x86_64"
+    elif [ "$ARCH" = "aarch64" ]; then
+      DOCKER_ARCH="aarch64"
+    else
+      echo "Unsupported arch: $ARCH"
+      exit 1
+    fi
+    curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-24.0.7.tgz" -o docker.tgz
+    tar xzvf docker.tgz --strip-components=1 docker/docker
+    mv docker /usr/local/bin/
+    rm -f docker.tgz
+  fi
+fi
+
 # Avoid virtualenv/pip trying to download/upgrade tools from PyPI on host
 export VIRTUALENV_NO_DOWNLOAD=1
 export PIP_DISABLE_PIP_VERSION_CHECK=1
+export PIP_BREAK_SYSTEM_PACKAGES=1
+export PIP_DEFAULT_TIMEOUT=60
+
+if [ "$(uname -m)" = "aarch64" ]; then
+  export CIBW_ARCHS="aarch64"
+else
+  export CIBW_ARCHS="x86_64"
+fi
 
 # Pass these environment variables to the cibuildwheel Docker container
-export CIBW_ENVIRONMENT="VIRTUALENV_NO_DOWNLOAD=1 PIP_DISABLE_PIP_VERSION_CHECK=1"
+export CIBW_ENVIRONMENT="VIRTUALENV_NO_DOWNLOAD=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_DEFAULT_TIMEOUT=120"
 export CIBW_DEPENDENCY_VERSIONS="latest"
 export CIBW_CONTAINER_ENGINE_EXTRA_ARGS="--network=host"
 
@@ -35,7 +65,10 @@ fi
 # cache. In a sandboxed build environment, writing to the default cache directory
 # (~/.cache/pip) can encounter permission/sandbox restrictions or lead to stale
 # dependency resolution. Disabling the cache ensures a reliable, reproducible install.
-pip install --no-cache-dir -U keyring keyrings.google-artifactregistry-auth twine cibuildwheel
+pip install --no-cache-dir -U keyring keyrings.google-artifactregistry-auth twine
+curl -fsSL https://github.com/pypa/cibuildwheel/archive/refs/tags/v4.1.0.tar.gz -o cibuildwheel-4.1.0.tar.gz
+pip install --no-cache-dir cibuildwheel-4.1.0.tar.gz
+rm -f cibuildwheel-4.1.0.tar.gz
 
 # ==============================================================================
 # FUTURE-PROOF RUNTIME PATCHING OF CIBUILDWHEEL
@@ -203,11 +236,25 @@ rm -rf cel_expr_python/*_test.py
 
 echo "Downloading bazelisk on host..."
 curl -LO https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-amd64
-chmod +x bazelisk-linux-amd64
+curl -LO https://github.com/bazelbuild/bazelisk/releases/download/v1.19.0/bazelisk-linux-arm64
+chmod +x bazelisk-linux-amd64 bazelisk-linux-arm64
 
-# Check if pyproject.toml exists before running sed
+echo "Debugging network..."
+curl -I https://pypi.org/simple/setuptools/ || echo "curl failed"
+python3 -c "import urllib.request; print('urllib status:', urllib.request.urlopen('https://pypi.org/simple/setuptools/', timeout=10).status)" || echo "urllib failed"
+
+echo "Downloading build dependencies on host..."
+mkdir -p build_deps
+pip download --no-cache-dir --only-binary=:all: --dest build_deps "setuptools>=40.8.0" "wheel"
+if [ "$(uname -m)" = "aarch64" ]; then
+  PLATFORM_SUFFIX="aarch64"
+else
+  PLATFORM_SUFFIX="x86_64"
+fi
+pip download --no-cache-dir --only-binary=:all: --dest build_deps --python-version 3.9 --platform "manylinux2014_${PLATFORM_SUFFIX}" "virtualenv" "typing-extensions>=4.13.2"
+
 if [ -f pyproject.toml ]; then
-  sed -i "" "s/\$VERSION/${VERSION}/g" pyproject.toml || sed -i "s/\$VERSION/${VERSION}/g" pyproject.toml
+  sed -i "s/\$VERSION/${VERSION}/g" pyproject.toml
 fi
 
 echo "Running cibuildwheel..."

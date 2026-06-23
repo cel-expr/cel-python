@@ -16,6 +16,11 @@ setlocal enabledelayedexpansion
 set "RELEASE_STATUS=0"
 set "FETCH_RETRIES=10"
 set "FETCH_RETRY_DELAY_S=10"
+echo --- Installing Python 3.11 via Chocolatey ---
+choco install python311 -y --no-progress
+if !ERRORLEVEL! NEQ 0 (
+    echo WARNING: Failed to install Python 3.11 via Chocolatey.
+)
 
 echo === Loading Environment Configuration ===
 call "%~dp0set_env_windows.bat"
