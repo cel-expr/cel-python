@@ -51,42 +51,51 @@ echo Created temporary directories: %REPO_DIR%, %TMP_DIR%
 mkdir "%TMP_DIR%"
 
 echo --- Resolving Repository Source ---
-if "%DRY_RUN%" == "true" (
-    echo [DRY RUN] Using local Kokoro clone instead of cloning main.
-    set "SRC_DIR=%~dp0..\.."
-    pushd "!SRC_DIR!"
-    for /f "tokens=*" %%i in ('git tag --sort=-v:refname 2^>nul') do (
-        set "VERSION=%%i"
-        goto :got_local_tag
-    )
-    set "VERSION=0.1.2"
-    :got_local_tag
-    popd
-) else (
-    mkdir "%REPO_DIR%"
-    pushd "%REPO_DIR%"
-    git clone https://github.com/cel-expr/cel-python.git
-    if !ERRORLEVEL! NEQ 0 (
-        echo Failed to clone repository!
-        set "RELEASE_STATUS=1"
-        popd
-        goto cleanup
-    )
-    cd cel-python
-    for /f "tokens=*" %%i in ('git tag --sort=-v:refname') do (
-        set "VERSION=%%i"
-        goto :got_tag
-    )
-    :got_tag
-    if "%VERSION%" == "" (
-        echo Failed to get version tag!
-        set "RELEASE_STATUS=1"
-        popd
-        goto cleanup
-    )
-    set "SRC_DIR=%REPO_DIR%\cel-python"
-    popd
+if "%DRY_RUN%" == "true" goto resolution_dry
+goto resolution_real
+
+:resolution_dry
+echo [DRY RUN] Using local Kokoro clone instead of cloning main.
+set "SRC_DIR=%~dp0..\.."
+pushd "!SRC_DIR!"
+set "VERSION="
+for /f "tokens=*" %%i in ('git tag --sort=-v:refname 2^>nul') do (
+    set "VERSION=%%i"
+    goto got_local_tag
 )
+:got_local_tag
+if "%VERSION%" == "" set "VERSION=0.1.2"
+popd
+goto resolution_done
+
+:resolution_real
+mkdir "%REPO_DIR%"
+pushd "%REPO_DIR%"
+git clone https://github.com/cel-expr/cel-python.git
+if !ERRORLEVEL! NEQ 0 (
+    echo Failed to clone repository!
+    set "RELEASE_STATUS=1"
+    popd
+    goto cleanup
+)
+cd cel-python
+set "VERSION="
+for /f "tokens=*" %%i in ('git tag --sort=-v:refname') do (
+    set "VERSION=%%i"
+    goto got_tag
+)
+:got_tag
+if "%VERSION%" == "" (
+    echo Failed to get version tag!
+    set "RELEASE_STATUS=1"
+    popd
+    goto cleanup
+)
+set "SRC_DIR=%REPO_DIR%\cel-python"
+popd
+goto resolution_done
+
+:resolution_done
 
 if "%VERSION:~0,1%" == "v" (
     set "VERSION=%VERSION:~1%"
