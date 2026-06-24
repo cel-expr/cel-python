@@ -72,6 +72,9 @@ class BazelBuild(setuptools.command.build_ext.build_ext):
     # Build with bazel
     # Use --compilation_mode=opt for release builds
     cmd = ['bazel', 'build', ext.target, '--compilation_mode=opt']
+    extra_flags = os.environ.get('CEL_BAZEL_FLAGS')
+    if extra_flags:
+      cmd.extend(extra_flags.split())
     if sys.platform == 'win32':
       self.platform_config_windows(cmd, python_version)
     if sys.platform == 'darwin':

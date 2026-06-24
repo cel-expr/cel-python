@@ -65,6 +65,8 @@ if [ -f pyproject.toml ]; then
   sed -i "" "s/\$VERSION/${VERSION}/g" pyproject.toml || sed -i "s/\$VERSION/${VERSION}/g" pyproject.toml
 fi
 
+export CEL_BAZEL_FLAGS="--config=remote-cache-macos"
+
 echo "Running cibuildwheel: ${CIBWHEEL_BIN}"
 # Default CIBWHEEL_BIN if not set
 if [ -z "${CIBWHEEL_BIN}" ]; then

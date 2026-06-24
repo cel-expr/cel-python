@@ -28,13 +28,17 @@ common:windows --experimental_repository_downloader_retries=10
 build --verbose_failures
 test --test_output=errors
 
-# GCS remote caching config (Windows-only, active by default on Windows!)
-build:windows --remote_cache=https://storage.googleapis.com/windows-cel-python-remote-cache
-build:windows --google_default_credentials=true
+# GCS remote caching config (Linux-only, opt-in)
+build:remote-cache-linux --remote_cache=https://storage.googleapis.com/linux-cel-python-remote-cache
+build:remote-cache-linux --google_default_credentials=true
 
-# GCS remote caching config (macOS-only, active by default on macOS!)
-build:macos --remote_cache=https://storage.googleapis.com/macos-cel-python-remote-cache
-build:macos --google_default_credentials=true
+# GCS remote caching config (Windows-only, opt-in)
+build:remote-cache-windows --remote_cache=https://storage.googleapis.com/windows-cel-python-remote-cache
+build:remote-cache-windows --google_default_credentials=true
+
+# GCS remote caching config (macOS-only, opt-in)
+build:remote-cache-macos --remote_cache=https://storage.googleapis.com/macos-cel-python-remote-cache
+build:remote-cache-macos --google_default_credentials=true
 
 # Silence deprecation warnings from external dependencies (Linux and macOS)
 build:linux --cxxopt=-Wno-deprecated-declarations
