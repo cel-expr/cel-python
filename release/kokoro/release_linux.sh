@@ -17,7 +17,8 @@ set -e
 
 if ! command -v pip3 &> /dev/null || ! command -v curl &> /dev/null || ! command -v docker &> /dev/null || ! command -v git &> /dev/null; then
   echo "Installing basic dependencies..."
-  apt-get update && apt-get install -y python3-pip curl git
+  apt-get update && apt-get install -y python3-pip curl git ca-certificates
+  git config --global http.sslCAinfo /etc/ssl/certs/ca-certificates.crt
 
   if ! command -v docker &> /dev/null; then
     echo "Installing docker CLI..."
