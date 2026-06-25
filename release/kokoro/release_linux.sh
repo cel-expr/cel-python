@@ -15,27 +15,36 @@
 
 set -e
 
+echo "Updating ca-certificates..."
+apt-get update && apt-get install -y ca-certificates
+
 if ! command -v pip3 &> /dev/null || ! command -v curl &> /dev/null || ! command -v docker &> /dev/null || ! command -v git &> /dev/null; then
   echo "Installing basic dependencies..."
-  apt-get update && apt-get install -y python3-pip curl git ca-certificates
-  git config --global http.sslCAinfo /etc/ssl/certs/ca-certificates.crt
+  apt-get install -y python3-pip curl git
+fi
 
-  if ! command -v docker &> /dev/null; then
-    echo "Installing docker CLI..."
-    ARCH=$(uname -m)
-    if [ "$ARCH" = "x86_64" ]; then
-      DOCKER_ARCH="x86_64"
-    elif [ "$ARCH" = "aarch64" ]; then
-      DOCKER_ARCH="aarch64"
-    else
-      echo "Unsupported arch: $ARCH"
-      exit 1
-    fi
-    curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-24.0.7.tgz" -o docker.tgz
-    tar xzvf docker.tgz --strip-components=1 docker/docker
-    mv docker /usr/local/bin/
-    rm -f docker.tgz
+if ! command -v docker &> /dev/null; then
+  echo "Installing docker CLI..."
+  ARCH=$(uname -m)
+  if [ "$ARCH" = "x86_64" ]; then
+    DOCKER_ARCH="x86_64"
+  elif [ "$ARCH" = "aarch64" ]; then
+    DOCKER_ARCH="aarch64"
+  else
+    echo "Unsupported arch: $ARCH"
+    exit 1
   fi
+  curl -fsSL "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-24.0.7.tgz" -o docker.tgz
+  tar xzvf docker.tgz --strip-components=1 docker/docker
+  mv docker /usr/local/bin/
+  rm -f docker.tgz
+fi
+
+if [ -f /var/cache/proxy.crt ]; then
+  echo "Using proxy certificate for Git..."
+  git config --global http.sslCAinfo /var/cache/proxy.crt
+else
+  git config --global http.sslCAinfo /etc/ssl/certs/ca-certificates.crt
 fi
 
 # Avoid virtualenv/pip trying to download/upgrade tools from PyPI on host
@@ -206,6 +215,7 @@ if [ "${DRY_RUN}" = "true" ]; then
     VERSION="0.1.2"
   fi
   popd
+
 else
   pushd "${REPO_DIR}"
   git clone https://github.com/cel-expr/cel-python.git
