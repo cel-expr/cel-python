@@ -210,7 +210,7 @@ class CelTest(absltest.TestCase):
     res: cel.Value = self._eval("3.14", expected_return_type=cel.Type.DOUBLE)
     self.assertEqual(res.type(), cel.Type.DOUBLE)
     self.assertAlmostEqual(res.value(), 3.14, places=3)
-    self.assertAlmostEqual(res.plain_value(), 3.14, places=3)
+    self.assertAlmostEqual(res.plain_value(), 3.14, places=3)  # pyrefly: ignore[no-matching-overload]
     res = self._eval("3.14 / 2.0")
     self.assertAlmostEqual(res.value(), 1.57, places=3)
     res = self._eval(

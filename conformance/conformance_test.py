@@ -184,7 +184,7 @@ class ConformanceTest(absltest.TestCase):
     extensions: list[cel.CelExtensionBase] = []
     for key, value in self.EXTENSIONS_PER_TESTFILE.items():
       if self._testMethodName.find(key) != -1:
-        extensions = value
+        extensions = value  # pyrefly: ignore[bad-assignment]
         break
 
     self.env = cel.NewEnv(
