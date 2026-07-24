@@ -490,6 +490,34 @@ class CelEnvTest(absltest.TestCase):
     res = env.compile("hello('World')").eval()
     self.assertEqual(res.value(), "Hello, World!")
 
+  def test_standard_extensions_via_config(self):
+    config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
+      extensions:
+        - name: lists
+        - name: sets
+        - name: two-var-comprehensions
+        - name: optional
+        - name: regex
+      """)
+    env: cel.Env = cel.NewEnv(config=config)
+
+    # Test lists extension (e.g., reverse)
+    res = env.compile("[1, 2].reverse()").eval()
+    self.assertEqual(res.plain_value(), [2, 1])
+
+    # Test sets extension (e.g., intersects)
+    res = env.compile("sets.intersects([1, 2], [2, 3])").eval()
+    self.assertEqual(res.value(), True)
+
+    # Test two-var-comprehensions (e.g., all)
+    res = env.compile("[1, 2].all(i, v, v > 0)").eval()
+    self.assertEqual(res.value(), True)
+
+    # Test regex extension (e.g., replace)
+    expr = r"regex.replace('123-456', r'(\d+)-(\d+)', r'\2-\1')"
+    res = env.compile(expr).eval()
+    self.assertEqual(res.value(), "456-123")
+
   def test_config_extension_override_same_version(self):
     config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       extensions:
