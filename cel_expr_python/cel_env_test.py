@@ -461,9 +461,9 @@ class CelEnvTest(absltest.TestCase):
     for test_case in cases:
       with self.assertRaises(Exception) as e:
         cel.NewEnv(
-            extensions=[test_case[0]()],
+            extensions=[test_case[0]()],  # pyrefly: ignore[not-callable]
         )
-      self.assertRegex(str(e.exception), test_case[1])
+      self.assertRegex(str(e.exception), test_case[1])  # pyrefly: ignore[bad-argument-type]
 
   def test_config_extensions(self):
     config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
