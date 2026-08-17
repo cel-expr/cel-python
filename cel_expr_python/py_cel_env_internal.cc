@@ -45,6 +45,7 @@
 #include "cel_expr_python/py_cel_env_config.h"
 #include "cel_expr_python/py_cel_function.h"
 #include "cel_expr_python/py_cel_function_decl.h"
+#include "cel_expr_python/py_cel_options.h"
 #include "cel_expr_python/py_cel_overload.h"
 #include "cel_expr_python/py_cel_python_extension.h"
 #include "cel_expr_python/py_cel_type.h"
@@ -66,10 +67,12 @@ static const cel::FunctionDescriptorOptions kFunctionDescriptorOptions = {
 }  // namespace
 
 PyCelEnvInternal::PyCelEnvInternal(
-    const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
+    const PyCelEnvConfig& env_config, const PyCelOptions& options,
+    PyObject* py_descriptor_pool,
     std::vector<CelExtensionHandle> extension_handles,
     absl::flat_hash_map<std::string, py::object>& function_impls)
     : env_config_(env_config),
+      options_(options),
       py_descriptor_database_(py_descriptor_pool),
       descriptor_pool_(
           std::make_shared<google::protobuf::DescriptorPool>(&py_descriptor_database_)),
@@ -78,6 +81,9 @@ PyCelEnvInternal::PyCelEnvInternal(
           std::make_shared<PyMessageFactory>(py_descriptor_pool)),
       extensions_(std::move(extension_handles)),
       function_impls_(std::move(function_impls)) {
+  cel_env_.GetCompilerOptions().parser_options.enable_pratt_parser =
+      options.enable_pratt_parser;
+
   cel_env_.SetDescriptorPool(descriptor_pool_);
   cel_env_.SetConfig(env_config_.GetConfig());
   cel::RegisterStandardExtensions(cel_env_);
@@ -105,7 +111,8 @@ PyCelEnvInternal::PyCelEnvInternal(
 
 absl::StatusOr<std::shared_ptr<PyCelEnvInternal>>
 PyCelEnvInternal::NewCelEnvInternal(
-    const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
+    const PyCelEnvConfig& env_config, const PyCelOptions& options,
+    PyObject* py_descriptor_pool,
     const std::unordered_map<std::string, PyCelType>& variable_types,
     const std::vector<PyObject*>& extensions,
     cel::ExpressionContainer container,
@@ -219,7 +226,7 @@ PyCelEnvInternal::NewCelEnvInternal(
     }
   }
   return std::shared_ptr<PyCelEnvInternal>(
-      new PyCelEnvInternal(PyCelEnvConfig(config), py_descriptor_pool,
+      new PyCelEnvInternal(PyCelEnvConfig(config), options, py_descriptor_pool,
                            std::move(extension_handles), impls));
 }
 

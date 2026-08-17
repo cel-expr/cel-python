@@ -32,6 +32,7 @@
 #include "cel_expr_python/py_cel_env_internal.h"
 #include "cel_expr_python/py_cel_expression.h"
 #include "cel_expr_python/py_cel_function_decl.h"
+#include "cel_expr_python/py_cel_options.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_error_status.h"
 #include <pybind11/pybind11.h>
@@ -81,7 +82,8 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
          std::optional<std::vector<std::shared_ptr<PyCelFunctionDecl>>>&
              functions,
          std::optional<std::unordered_map<std::string, py::object>>&
-             function_impls) {
+             function_impls,
+         std::optional<PyCelOptions>& options) {
         PyObject* pool_ptr;
         if (descriptor_pool.is_none()) {
           // Replicates python's `descriptor_pool.Default()`
@@ -119,7 +121,10 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
           }
         }
 
-        return PyCelEnv(config.value_or(PyCelEnvConfig()), pool_ptr,
+        PyCelOptions env_options = options.value_or(PyCelOptions());
+
+        return PyCelEnv(config.value_or(PyCelEnvConfig()), env_options,
+                        pool_ptr,
                         std::move(variables).value_or(
                             std::unordered_map<std::string, PyCelType>{}),
                         ext_ptrs, std::move(expr_container),
@@ -131,10 +136,12 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
       py::arg("descriptor_pool") = py::none(), py::arg("config") = py::none(),
       py::arg("variables") = py::none(), py::arg("extensions") = py::none(),
       py::arg("container") = py::none(), py::arg("functions") = py::none(),
-      py::arg("function_impls") = py::none());
+      py::arg("function_impls") = py::none(), py::arg("options") = py::none());
   cel_class
       .def("config",
            [](PyCelEnv& self) { return self.GetEnv()->GetEnvConfig(); })
+      .def("options",
+           [](PyCelEnv& self) { return self.GetEnv()->GetOptions(); })
       .def("compile", &PyCelEnv::Compile, py::arg("expression"),
            py::arg("disable_check") = false)
       .def("deserialize", &PyCelEnv::Deserialize, py::arg("serialized"))
@@ -165,14 +172,15 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
 }
 
 PyCelEnv::PyCelEnv(
-    const PyCelEnvConfig& config, PyObject* descriptor_pool,
+    const PyCelEnvConfig& config, const PyCelOptions& options,
+    PyObject* descriptor_pool,
     const std::unordered_map<std::string, PyCelType>& variable_types,
     const std::vector<PyObject*>& extensions,
     cel::ExpressionContainer container,
     const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
     const std::unordered_map<std::string, py::object>& function_impls) {
   env_ = ThrowIfError(PyCelEnvInternal::NewCelEnvInternal(
-      config, descriptor_pool, std::move(variable_types), extensions,
+      config, options, descriptor_pool, std::move(variable_types), extensions,
       std::move(container), std::move(functions), std::move(function_impls)));
   ABSL_CHECK(PyGILState_Check());
 }

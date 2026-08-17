@@ -36,6 +36,7 @@
 #include "cel_expr_python/py_cel_env_config.h"
 #include "cel_expr_python/py_cel_function.h"
 #include "cel_expr_python/py_cel_function_decl.h"
+#include "cel_expr_python/py_cel_options.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_descriptor_database.h"
 #include "cel_expr_python/py_message_factory.h"
@@ -73,7 +74,8 @@ class PyCelEnvInternal {
  public:
   ~PyCelEnvInternal() = default;
   static absl::StatusOr<std::shared_ptr<PyCelEnvInternal>> NewCelEnvInternal(
-      const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
+      const PyCelEnvConfig& env_config, const PyCelOptions& options,
+      PyObject* py_descriptor_pool,
       const std::unordered_map<std::string, PyCelType>& variable_types,
       const std::vector<PyObject*>& extensions,
       cel::ExpressionContainer container,
@@ -81,6 +83,7 @@ class PyCelEnvInternal {
       const std::unordered_map<std::string, py::object>& function_impls);
 
   const PyCelEnvConfig& GetEnvConfig() const { return env_config_; }
+  const PyCelOptions& GetOptions() const { return options_; }
 
   static absl::StatusOr<const cel::Compiler*> GetCompiler(
       const std::shared_ptr<PyCelEnvInternal>& env);
@@ -113,8 +116,8 @@ class PyCelEnvInternal {
  private:
   // Use NewCelEnvInternal() to create an instance.
   PyCelEnvInternal(
-      const PyCelEnvConfig& env_config, PyObject* py_descriptor_pool,
-      std::vector<CelExtensionHandle> extensions,
+      const PyCelEnvConfig& env_config, const PyCelOptions& options,
+      PyObject* py_descriptor_pool, std::vector<CelExtensionHandle> extensions,
       absl::flat_hash_map<std::string, py::object>& function_impls);
 
   absl::Status ConfigureStandardExtension(
@@ -128,6 +131,7 @@ class PyCelEnvInternal {
   cel::Env cel_env_;
   cel::EnvRuntime cel_env_runtime_;
   PyCelEnvConfig env_config_;
+  PyCelOptions options_;
   PyDescriptorDatabase py_descriptor_database_;
   std::shared_ptr<google::protobuf::DescriptorPool> descriptor_pool_;
   google::protobuf::DynamicMessageFactory message_factory_;

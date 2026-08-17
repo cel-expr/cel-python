@@ -28,7 +28,9 @@ from cel_expr_python import cel
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 
 
-class CelTest(absltest.TestCase):
+@absltest.skipThisClass("Base class")
+class _CelTestBase(absltest.TestCase):
+  options: cel.Options = cel.Options()
 
   def setUp(self):
     super().setUp()
@@ -50,7 +52,8 @@ class CelTest(absltest.TestCase):
             "var_string_map": cel.Type.Map(cel.Type.STRING, cel.Type.BOOL),
             "var_dyn_map": cel.Type.MAP,
             "var_dyn": cel.Type.DYN,
-        }
+        },
+        options=self.options,
     )
     self.object_counts_before_test = self._grab_object_counts()
 
@@ -615,10 +618,13 @@ class CelTest(absltest.TestCase):
     self.assertIn("out of range for 'var_dyn'", res.value())
 
   def testDynType_nonCelType(self):
-    res = self._eval("var_dyn", {"var_dyn": self})
+    class NonCelValue:
+      pass
+
+    res = self._eval("var_dyn", {"var_dyn": NonCelValue()})
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn(
-        "Non-CEL value type for 'var_dyn': CelTest",
+        "Non-CEL value type for 'var_dyn': NonCelValue",
         res.value(),
     )
 
@@ -768,18 +774,26 @@ class CelTest(absltest.TestCase):
     # Check parser error.
     with self.assertRaises(Exception) as e:
       self.env.compile("'Hello,' # 'World!'", disable_check=True)
-    self.assertIn(
-        "1:10: Syntax error: token recognition error at: '#'\n "
-        "| 'Hello,' # 'World!'\n "
-        "| .........^",
-        str(e.exception),
-    )
-    self.assertIn(
-        "1:12: Syntax error: extraneous input ''World!'' expecting <EOF>\n "
-        "| 'Hello,' # 'World!'\n "
-        "| ...........^",
-        str(e.exception),
-    )
+    if self.options.enable_pratt_parser:
+      self.assertIn(
+          "1:10: unexpected character\n"
+          " | 'Hello,' # 'World!'\n"
+          " | .........^",
+          str(e.exception),
+      )
+    else:
+      self.assertIn(
+          "1:10: Syntax error: token recognition error at: '#'\n "
+          "| 'Hello,' # 'World!'\n "
+          "| .........^",
+          str(e.exception),
+      )
+      self.assertIn(
+          "1:12: Syntax error: extraneous input ''World!'' expecting <EOF>\n "
+          "| 'Hello,' # 'World!'\n "
+          "| ...........^",
+          str(e.exception),
+      )
 
     # Check type-checker error.
     with self.assertRaises(Exception) as e:
@@ -793,7 +807,11 @@ class CelTest(absltest.TestCase):
     )
 
   def testErrorHandling(self):
-    bad_env = cel.NewEnv(_BadDescriptorPool(), variables={})
+    bad_env = cel.NewEnv(
+        _BadDescriptorPool(),
+        variables={},
+        options=self.options,
+    )
     with self.assertRaises(Exception) as e:
       bad_env.compile("cel.expr.conformance.proto2.TestSomeTypes{}")
     self.assertRegex(
@@ -927,6 +945,15 @@ class CelWithoutProtoSupportTest(absltest.TestCase):
         " 'cel.expr.conformance.proto2.TestAllTypes'",
         str(e.exception),
     )
+
+
+class CelTest(_CelTestBase):
+  # Default options.
+  pass
+
+
+class CelPrattParserTest(_CelTestBase):
+  options = cel.Options(enable_pratt_parser=True)
 
 
 if __name__ == "__main__":

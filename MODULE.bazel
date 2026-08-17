@@ -3,7 +3,11 @@ module(
 )
 
 # https://registry.bazel.build/modules/abseil-cpp
-bazel_dep(name = "abseil-cpp", version = "20260107.0", repo_name = "com_google_absl")
+bazel_dep(name = "abseil-cpp", version = "20260526.0", repo_name = "com_google_absl")
+single_version_override(
+    module_name = "abseil-cpp",
+    version = "20260526.0",
+)
 
 # https://registry.bazel.build/modules/abseil-py
 bazel_dep(name = "abseil-py", version = "2.4.0", repo_name = "com_google_absl_py")
@@ -12,10 +16,10 @@ bazel_dep(name = "abseil-py", version = "2.4.0", repo_name = "com_google_absl_py
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 
 # https://registry.bazel.build/modules/cel-cpp
-bazel_dep(name = "cel-cpp", version = "0.15.0", repo_name = "com_google_cel_cpp")
+bazel_dep(name = "cel-cpp", version = "0.16.1", repo_name = "com_google_cel_cpp")
 git_override(
     module_name = "cel-cpp",
-    commit = "76ae0b3c1768d93a10270f904101de338867bdb1",
+    commit = "1dcff093b3ca3d575f982e2ca154f9c751e06055",
     remote = "https://github.com/cel-expr/cel-cpp",
 )
 
