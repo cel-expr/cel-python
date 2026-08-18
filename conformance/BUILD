@@ -14,6 +14,7 @@ _ALL_TESTS = [
     "@com_google_cel_spec//tests/simple:testdata/fp_math.textproto",
     "@com_google_cel_spec//tests/simple:testdata/integer_math.textproto",
     "@com_google_cel_spec//tests/simple:testdata/lists.textproto",
+    "@com_google_cel_spec//tests/simple:testdata/lists_ext.textproto",
     "@com_google_cel_spec//tests/simple:testdata/logic.textproto",
     "@com_google_cel_spec//tests/simple:testdata/macros.textproto",
     "@com_google_cel_spec//tests/simple:testdata/math_ext.textproto",

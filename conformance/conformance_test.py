@@ -60,13 +60,6 @@ class ConformanceTestSuite(unittest.TestSuite):
       "fields/qualified_identifier_resolution/qualified_identifier_resolution_unchecked",
       "fields/qualified_identifier_resolution/map_value_repeat_key_heterogeneous",
       "namespace/namespace/self_eval_container_lookup_unchecked",
-      # TODO(b/453051120): fix support for FieldMask->toJson
-      "wrappers/field_mask/to_json",
-      # TODO(b/464071224): fix support for triple-quoted unescaped punctuation.
-      "parse/bytes_literals/triple_double_quoted_unescaped_punctuation",
-      "parse/bytes_literals/triple_single_quoted_unescaped_punctuation",
-      "parse/string_literals/triple_double_quoted_unescaped_punctuation",
-      "parse/string_literals/triple_single_quoted_unescaped_punctuation",
       # Recent changes
       "proto2/set_null/repeated_field_timestamp_null_pruned",
       "proto2/set_null/repeated_field_duration_null_pruned",
@@ -80,10 +73,8 @@ class ConformanceTestSuite(unittest.TestSuite):
       "proto3/set_null/map_timestamp_null_pruned",
       "proto3/set_null/map_duration_null_pruned",
       "proto3/set_null/map_wrapper_null_pruned",
-      "string_ext/format/default precision for fixed-point clause with int",
-      "string_ext/format/default precision for fixed-point clause with uint",
-      "string_ext/format/default precision for scientific notation with int",
-      "string_ext/format/default precision for scientific notation with uint",
+      # TODO(b/548571767): add lists_ext support
+      "lists_ext/.*",
   ]
 
   if sys.platform == "win32":
