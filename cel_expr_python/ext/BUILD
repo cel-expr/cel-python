@@ -40,6 +40,27 @@ pybind_extension(
 )
 
 pybind_extension(
+    name = "ext_lists",
+    srcs = [
+        "ext_lists.cc",
+    ],
+    data = [
+        "ext_lists.pyi",
+        "//cel_expr_python:cel",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//cel_expr_python:cel_extension",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_cel_cpp//compiler",
+        "@com_google_cel_cpp//extensions:lists_functions",
+        "@com_google_cel_cpp//runtime:runtime_builder",
+        "@com_google_cel_cpp//runtime:runtime_options",
+    ],
+)
+
+pybind_extension(
     name = "ext_math",
     srcs = [
         "ext_math.cc",

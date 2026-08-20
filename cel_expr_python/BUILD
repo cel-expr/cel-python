@@ -172,6 +172,7 @@ py_test(
     data = [
         ":cel",
         "//cel_expr_python/ext:ext_bindings",
+        "//cel_expr_python/ext:ext_lists",
         "//cel_expr_python/ext:ext_math",
         "//cel_expr_python/ext:ext_optional",
         "//cel_expr_python/ext:ext_strings",
@@ -184,6 +185,7 @@ py_test(
         "//conditions:default": [
             ":cel",
             "//cel_expr_python/ext:ext_bindings",
+            "//cel_expr_python/ext:ext_lists",
             "//cel_expr_python/ext:ext_math",
             "//cel_expr_python/ext:ext_optional",
             "//cel_expr_python/ext:ext_strings",

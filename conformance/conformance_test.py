@@ -32,6 +32,7 @@ from python.runfiles import runfiles
 from cel_expr_python import cel
 from cel_expr_python.ext import ext_bindings
 from cel_expr_python.ext import ext_encoders
+from cel_expr_python.ext import ext_lists
 from cel_expr_python.ext import ext_math
 from cel_expr_python.ext import ext_optional
 from cel_expr_python.ext import ext_proto
@@ -73,8 +74,6 @@ class ConformanceTestSuite(unittest.TestSuite):
       "proto3/set_null/map_timestamp_null_pruned",
       "proto3/set_null/map_duration_null_pruned",
       "proto3/set_null/map_wrapper_null_pruned",
-      # TODO(b/548571767): add lists_ext support
-      "lists_ext/.*",
   ]
 
   if sys.platform == "win32":
@@ -147,6 +146,7 @@ class ConformanceTest(absltest.TestCase):
   EXTENSIONS_PER_TESTFILE = {
       "bindings_ext": [ext_bindings.ExtBindings()],
       "encoders_ext": [ext_encoders.ExtEncoders()],
+      "lists_ext": [ext_lists.ExtLists()],
       "math_ext": [ext_math.ExtMath()],
       "optionals": [ext_optional.ExtOptional()],
       "proto2_ext": [ext_proto.ExtProto()],

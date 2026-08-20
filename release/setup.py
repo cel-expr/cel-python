@@ -208,6 +208,10 @@ setuptools.setup(
             '//cel_expr_python/ext:ext_encoders',
         ),
         BazelExtension(
+            'cel_expr_python.ext.ext_lists',
+            '//cel_expr_python/ext:ext_lists',
+        ),
+        BazelExtension(
             'cel_expr_python.ext.ext_math',
             '//cel_expr_python/ext:ext_math',
         ),
