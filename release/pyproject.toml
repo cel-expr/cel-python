@@ -17,7 +17,7 @@ name = "cel-expr-python"
 # $VERSION is replaced with the desired version in build_wheel.sh.
 version = "$VERSION"
 description = "The CEL Python runtime"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 classifiers = [
   "Topic :: Software Development :: Interpreters",
   "Topic :: Software Development :: Libraries :: Python Modules",
@@ -38,7 +38,7 @@ where = ["."]
 exclude = ["codelab*", "conformance*", "custom_ext*", "release*", "testing*", "wheelhouse*"]
 
 [tool.cibuildwheel]
-build = "cp311-* cp312-* cp313-* cp314-*"
+build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
 skip = "*musllinux* *win32* *i686*"
 test-command = "python {project}/cel_basic_test.py"
 build-verbosity = 1

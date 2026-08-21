@@ -11,7 +11,7 @@ fi
 pip install -U keyring keyrings.google-artifactregistry-auth twine cibuildwheel
 
 echo "Installing CPython Mac Frameworks..."
-for pyver in "3.11.9" "3.12.4" "3.13.0" "3.14.3"; do
+for pyver in "3.10.11" "3.11.9" "3.12.4" "3.13.0" "3.14.3"; do
   echo "Downloading and installing Python ${pyver}..."
   curl -LO "https://www.python.org/ftp/python/${pyver}/python-${pyver}-macos11.pkg"
   sudo installer -pkg "python-${pyver}-macos11.pkg" -target /
