@@ -25,6 +25,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/synchronization/mutex.h"
 #include "checker/type_checker_builder.h"
 #include "common/container.h"
 #include "common/function_descriptor.h"
@@ -40,7 +41,6 @@
 #include "runtime/runtime.h"
 #include "runtime/runtime_builder.h"
 #include "runtime/runtime_options.h"
-#include "validator/validator.h"
 #include "cel_expr_python/cel_extension.h"
 #include "cel_expr_python/py_cel_env_config.h"
 #include "cel_expr_python/py_cel_function.h"
@@ -230,19 +230,17 @@ PyCelEnvInternal::NewCelEnvInternal(
                            std::move(extension_handles), impls));
 }
 
-absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
-    const std::shared_ptr<PyCelEnvInternal>& env) {
-  ABSL_CHECK(PyGILState_Check());
-
-  if (env->compiler_) {
-    return env->compiler_.get();
+absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler() const {
+  absl::MutexLock lock(mutex_);
+  if (compiler_) {
+    return compiler_.get();
   }
 
-  const cel::Config& config = env->env_config_.GetConfig();
+  const cel::Config& config = env_config_.GetConfig();
 
   CEL_PYTHON_ASSIGN_OR_RETURN(
       std::unique_ptr<cel::CompilerBuilder> compiler_builder,
-      env->cel_env_.NewCompilerBuilder());
+      cel_env_.NewCompilerBuilder());
 
   cel::TypeCheckerBuilder& checker_builder =
       compiler_builder->GetCheckerBuilder();
@@ -266,25 +264,25 @@ absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler(
   for (const cel::Config::VariableConfig& variable_config :
        config.GetVariableConfigs()) {
     CEL_PYTHON_ASSIGN_OR_RETURN(
-        cel::Type cel_type,
-        cel::TypeInfoToType(variable_config.type_info,
-                            env->descriptor_pool_.get(), arena));
+        cel::Type cel_type, cel::TypeInfoToType(variable_config.type_info,
+                                                descriptor_pool_.get(), arena));
     PyCelType py_cel_type = PyCelType::FromCelType(cel_type);
-    env->variable_types_[variable_config.name] = py_cel_type;
+    variable_types_[variable_config.name] = py_cel_type;
   }
 
-  CEL_PYTHON_ASSIGN_OR_RETURN(env->compiler_, compiler_builder->Build());
-  return env->compiler_.get();
+  CEL_PYTHON_ASSIGN_OR_RETURN(compiler_, compiler_builder->Build());
+  return compiler_.get();
 }
 
 absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
-    const std::shared_ptr<PyCelEnvInternal>& env, RuntimeMode runtime_mode) {
-  if (auto it = env->runtimes_.find(runtime_mode); it != env->runtimes_.end()) {
+    RuntimeMode runtime_mode) const {
+  absl::MutexLock lock(mutex_);
+  if (auto it = runtimes_.find(runtime_mode); it != runtimes_.end()) {
     return it->second.get();
   }
 
-  cel::RuntimeOptions& opts = env->cel_env_runtime_.mutable_runtime_options();
-  opts.container = env->GetEnvConfig().GetConfig().GetContainerConfig().name;
+  cel::RuntimeOptions opts;
+  opts.container = env_config_.GetConfig().GetContainerConfig().name;
   opts.enable_empty_wrapper_null_unboxing = true;
   opts.enable_qualified_type_identifiers = true;
   opts.enable_timestamp_duration_overflow_errors = true;
@@ -296,16 +294,16 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
       break;
   }
   CEL_PYTHON_ASSIGN_OR_RETURN(cel::RuntimeBuilder builder,
-                              env->cel_env_runtime_.CreateRuntimeBuilder());
+                              cel_env_runtime_.CreateRuntimeBuilder(opts));
   CEL_PYTHON_RETURN_IF_ERROR(cel::EnableReferenceResolver(
       builder, cel::ReferenceResolverEnabled::kAlways));
 
   for (const cel::Config::FunctionConfig& function_config :
-       env->GetEnvConfig().GetConfig().GetFunctionConfigs()) {
+       GetEnvConfig().GetConfig().GetFunctionConfigs()) {
     for (const cel::Config::FunctionOverloadConfig& overload_config :
          function_config.overload_configs) {
-      auto it = env->function_impls_.find(overload_config.overload_id);
-      if (it == env->function_impls_.end()) {
+      auto it = function_impls_.find(overload_config.overload_id);
+      if (it == function_impls_.end()) {
         continue;
       }
       py::object py_function = it->second;
@@ -315,8 +313,7 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
            overload_config.parameters) {
         CEL_PYTHON_ASSIGN_OR_RETURN(
             cel::Type type,
-            cel::TypeInfoToType(parameter, env->descriptor_pool_.get(),
-                                &env->arena_));
+            cel::TypeInfoToType(parameter, descriptor_pool_.get(), &arena_));
         param_kinds.push_back(static_cast<cel::Kind>(type.kind()));
       }
       cel::FunctionDescriptor descriptor(
@@ -325,7 +322,7 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
       CEL_PYTHON_ASSIGN_OR_RETURN(
           cel::Type return_type,
           cel::TypeInfoToType(overload_config.return_type,
-                              env->descriptor_pool_.get(), &env->arena_));
+                              descriptor_pool_.get(), &arena_));
       CEL_PYTHON_RETURN_IF_ERROR(builder.function_registry().Register(
           descriptor, std::make_unique<PyCelFunctionAdapter>(
                           function_config.name,
@@ -335,13 +332,13 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
   CEL_PYTHON_ASSIGN_OR_RETURN(std::unique_ptr<cel::Runtime> runtime,
                               std::move(builder).Build());
   const cel::Runtime* runtime_ptr = runtime.get();
-  env->runtimes_[runtime_mode] = std::move(runtime);
+  runtimes_[runtime_mode] = std::move(runtime);
   return runtime_ptr;
 }
 
 const PyCelType& PyCelEnvInternal::GetVariableType(
     const std::string& name) const {
-  ABSL_CHECK(PyGILState_Check());
+  absl::MutexLock lock(mutex_);
   auto it = variable_types_.find(name);
   if (it != variable_types_.end()) {
     return it->second;
@@ -363,9 +360,8 @@ CelExtensionHandle::CelExtensionHandle(CelExtensionHandle&& other)
 
 CelExtensionHandle::~CelExtensionHandle() {
   if (py_extension_ != nullptr) {
-    auto gil_state = PyGILState_Ensure();
+    py::gil_scoped_acquire acquire;
     Py_DECREF(py_extension_);
-    PyGILState_Release(gil_state);
   }
 }
 

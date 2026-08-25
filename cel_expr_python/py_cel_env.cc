@@ -196,6 +196,18 @@ std::shared_ptr<PyCelActivation> PyCelEnv::NewActivation(
 
 PyCelExpression PyCelEnv::Compile(const std::string& cel_expr,
                                   bool disable_check) {
+  // Release the GIL before entering C++ compilation to prevent lock
+  // inversion/deadlock with DescriptorPool's internal mutex during concurrent
+  // multi-threaded compilation.
+  //
+  // When DescriptorPool performs a descriptor lookup on a cache miss, it calls
+  // back into Python via PyDescriptorDatabase (which re-acquires the GIL via
+  // PyGILState_Ensure). If another thread were to enter Compile() with the GIL
+  // held, it would block on DescriptorPool's internal C++ mutex while holding
+  // the GIL, causing an AB-BA deadlock with any thread inside
+  // PyDescriptorDatabase waiting for the GIL. Releasing the GIL here guarantees
+  // a strict one-way lock hierarchy (DescriptorPool Mutex -> Python GIL).
+  py::gil_scoped_release gil_release;
   return ThrowIfError(PyCelExpression::Compile(env_, cel_expr, disable_check));
 }
 

@@ -22,9 +22,11 @@
 #include <unordered_map>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "common/container.h"
 #include "compiler/compiler.h"
 #include "env/env.h"
@@ -85,8 +87,7 @@ class PyCelEnvInternal {
   const PyCelEnvConfig& GetEnvConfig() const { return env_config_; }
   const PyCelOptions& GetOptions() const { return options_; }
 
-  static absl::StatusOr<const cel::Compiler*> GetCompiler(
-      const std::shared_ptr<PyCelEnvInternal>& env);
+  absl::StatusOr<const cel::Compiler*> GetCompiler() const;
 
   enum RuntimeMode {
     // Standard CEL runtime with warnings treated as errors.
@@ -96,15 +97,15 @@ class PyCelEnvInternal {
     kStandardIgnoreWarnings,
   };
 
-  static absl::StatusOr<const cel::Runtime*> GetRuntime(
-      const std::shared_ptr<PyCelEnvInternal>& env, RuntimeMode runtime_mode);
+  absl::StatusOr<const cel::Runtime*> GetRuntime(
+      RuntimeMode runtime_mode) const;
 
   const google::protobuf::DescriptorPool* GetDescriptorPool() const {
     return descriptor_pool_.get();
   }
 
   google::protobuf::MessageFactory* GetMessageFactory() const {
-    return const_cast<google::protobuf::DynamicMessageFactory*>(&message_factory_);
+    return &message_factory_;
   }
 
   std::shared_ptr<PyMessageFactory> GetPyMessageFactory() const {
@@ -117,32 +118,27 @@ class PyCelEnvInternal {
   // Use NewCelEnvInternal() to create an instance.
   PyCelEnvInternal(
       const PyCelEnvConfig& env_config, const PyCelOptions& options,
-      PyObject* py_descriptor_pool, std::vector<CelExtensionHandle> extensions,
+      PyObject* py_descriptor_pool,
+      std::vector<CelExtensionHandle> extension_handles,
       absl::flat_hash_map<std::string, py::object>& function_impls);
 
-  absl::Status ConfigureStandardExtension(
-      cel::CompilerBuilder& compiler_builder, const std::string& extension);
-
-  absl::Status ConfigureStandardExtension(cel::RuntimeBuilder& runtime_builder,
-                                          const std::string& extension,
-                                          const cel::RuntimeOptions& opts);
-
-  google::protobuf::Arena arena_;
+  mutable absl::Mutex mutex_;
+  mutable google::protobuf::Arena arena_ ABSL_GUARDED_BY(mutex_);
   cel::Env cel_env_;
   cel::EnvRuntime cel_env_runtime_;
   PyCelEnvConfig env_config_;
   PyCelOptions options_;
   PyDescriptorDatabase py_descriptor_database_;
   std::shared_ptr<google::protobuf::DescriptorPool> descriptor_pool_;
-  google::protobuf::DynamicMessageFactory message_factory_;
+  mutable google::protobuf::DynamicMessageFactory message_factory_;
   std::shared_ptr<PyMessageFactory> py_message_factory_;
-  // Synchronized by the GIL.
-  absl::flat_hash_map<std::string, PyCelType> variable_types_;
+  mutable absl::flat_hash_map<std::string, PyCelType> variable_types_
+      ABSL_GUARDED_BY(mutex_);
   std::vector<CelExtensionHandle> extensions_;
   absl::flat_hash_map<std::string, py::object> function_impls_;
-  std::unique_ptr<cel::Compiler> compiler_;
-  absl::flat_hash_map<RuntimeMode, std::unique_ptr<const cel::Runtime>>
-      runtimes_;
+  mutable std::unique_ptr<cel::Compiler> compiler_ ABSL_GUARDED_BY(mutex_);
+  mutable absl::flat_hash_map<RuntimeMode, std::unique_ptr<const cel::Runtime>>
+      runtimes_ ABSL_GUARDED_BY(mutex_);
 };
 
 }  // namespace cel_python

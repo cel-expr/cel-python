@@ -105,10 +105,8 @@ void PyCelExpression::DefinePythonBindings(py::module& m) {
 absl::StatusOr<PyCelExpression> PyCelExpression::Compile(
     const std::shared_ptr<PyCelEnvInternal>& env, const std::string& cel_expr,
     bool disable_check) {
-  ABSL_CHECK(PyGILState_Check());
-
   CEL_PYTHON_ASSIGN_OR_RETURN(const cel::Compiler* compiler,
-                              PyCelEnvInternal::GetCompiler(env));
+                              env->GetCompiler());
 
   if (disable_check) {
     CEL_PYTHON_ASSIGN_OR_RETURN(auto s, cel::NewSource(cel_expr, "<input>"));
@@ -153,15 +151,14 @@ absl::StatusOr<PyCelValue> PyCelExpression::Eval(
     if (std::holds_alternative<ParsedExpr>(expr_)) {
       PY_CEL_PYTHON_ASSIGN_OR_RETURN(
           const cel::Runtime* runtime,
-          PyCelEnvInternal::GetRuntime(
-              env_, PyCelEnvInternal::kStandardIgnoreWarnings));
+          env_->GetRuntime(PyCelEnvInternal::kStandardIgnoreWarnings));
       PY_CEL_PYTHON_ASSIGN_OR_RETURN(
           cel_program_, cel::extensions::ProtobufRuntimeAdapter::CreateProgram(
                             *runtime, std::get<ParsedExpr>(expr_)));
     } else {
       PY_CEL_PYTHON_ASSIGN_OR_RETURN(
           const cel::Runtime* runtime,
-          PyCelEnvInternal::GetRuntime(env_, PyCelEnvInternal::kStandard));
+          env_->GetRuntime(PyCelEnvInternal::kStandard));
       PY_CEL_PYTHON_ASSIGN_OR_RETURN(
           cel_program_, cel::extensions::ProtobufRuntimeAdapter::CreateProgram(
                             *runtime, std::get<CheckedExpr>(expr_)));

@@ -29,6 +29,8 @@
 
 namespace cel_python {
 
+namespace py = pybind11;
+
 static absl::Status PyErrorToStatus(PyObject* py_type, PyObject* py_error) {
   // Loose mapping from Python exceptions to absl::Status codes, consistent with
   // the pybind11 mapping.
@@ -96,11 +98,13 @@ std::runtime_error StatusToException(const absl::Status& status) {
 }
 
 static absl::Status& PendingPyError() {
-  static absl::NoDestructor<absl::Status> pending_py_error(absl::OkStatus());
+  static thread_local absl::NoDestructor<absl::Status> pending_py_error(
+      absl::OkStatus());
   return *pending_py_error;
 }
 
 absl::Status PyErr_toStatus() {
+  py::gil_scoped_acquire acquire;
   PyObject* py_error = PyErr_Occurred();
   if (!py_error) {
     absl::Status status = PendingPyError();
@@ -132,6 +136,7 @@ absl::Status PyErr_toStatus() {
 }
 
 void PyErr_noteAndClear() {
+  py::gil_scoped_acquire acquire;
   if (!PyErr_Occurred()) {
     return;
   }

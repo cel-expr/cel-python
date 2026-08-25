@@ -51,6 +51,7 @@ pybind_library(
         ":cel_extension",
         ":status_macros",
         "@com_google_absl//absl/base",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:function_ref",
@@ -60,6 +61,7 @@ pybind_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
@@ -94,7 +96,6 @@ pybind_library(
         "@com_google_cel_cpp//runtime:reference_resolver",
         "@com_google_cel_cpp//runtime:runtime_builder",
         "@com_google_cel_cpp//runtime:runtime_options",
-        "@com_google_cel_cpp//validator",
         "@com_google_cel_spec//proto/cel/expr:checked_cc_proto",
         "@com_google_cel_spec//proto/cel/expr:syntax_cc_proto",
         "@com_google_protobuf//:protobuf",
@@ -160,6 +161,21 @@ py_test(
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_protobuf//:protobuf",
+    ] + select({
+        "@platforms//os:windows": [],
+        "//conditions:default": [":cel"],
+    }),
+)
+
+py_test(
+    name = "cel_parallel_test",
+    srcs = ["cel_parallel_test.py"],
+    data = [
+        ":cel",
+    ],
+    deps = [
+        "//testing:proto2_test_all_types_py_pb2",
+        "@com_google_absl_py//absl/testing:absltest",
     ] + select({
         "@platforms//os:windows": [],
         "//conditions:default": [":cel"],

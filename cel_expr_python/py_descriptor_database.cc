@@ -25,8 +25,11 @@
 #include "common/minimal_descriptor_pool.h"
 #include "cel_expr_python/py_error_status.h"
 #include "google/protobuf/descriptor.h"
+#include <pybind11/pybind11.h>
 
 namespace cel_python {
+
+namespace py = pybind11;
 
 PyDescriptorDatabase::PyDescriptorDatabase(PyObject* py_descriptor_pool)
     : py_descriptor_pool_(py_descriptor_pool),
@@ -36,16 +39,14 @@ PyDescriptorDatabase::PyDescriptorDatabase(PyObject* py_descriptor_pool)
 }
 
 PyDescriptorDatabase::~PyDescriptorDatabase() {
-  auto gil_state = PyGILState_Ensure();
+  py::gil_scoped_acquire acquire;
   Py_XDECREF(py_descriptor_pool_);
-  PyGILState_Release(gil_state);
 }
 
 // Find a file by file name.  Fills in in *output and returns true if found.
 // Otherwise, returns false, leaving the contents of *output undefined.
 bool PyDescriptorDatabase::FindFileByName(StringViewArg filename,
                                           google::protobuf::FileDescriptorProto* output) {
-  ABSL_CHECK(PyGILState_Check());
   const google::protobuf::FileDescriptor* file = standard_pool_.FindFileByName(filename);
   if (file != nullptr) {
     file->CopyTo(output);
@@ -56,6 +57,7 @@ bool PyDescriptorDatabase::FindFileByName(StringViewArg filename,
     return false;
   }
 
+  py::gil_scoped_acquire acquire;
   PyObject* pyfile = PyObject_CallMethod(
       py_descriptor_pool_, "FindFileByName", "s#", filename.data(),
       static_cast<Py_ssize_t>(filename.size()));
@@ -94,7 +96,6 @@ bool PyDescriptorDatabase::FindFileByName(StringViewArg filename,
 // and leaves *output undefined.
 bool PyDescriptorDatabase::FindFileContainingSymbol(
     StringViewArg symbol_name, google::protobuf::FileDescriptorProto* output) {
-  ABSL_CHECK(PyGILState_Check());
   const google::protobuf::FileDescriptor* file =
       standard_pool_.FindFileContainingSymbol(symbol_name);
   if (file != nullptr) {
@@ -106,6 +107,7 @@ bool PyDescriptorDatabase::FindFileContainingSymbol(
     return false;
   }
 
+  py::gil_scoped_acquire acquire;
   PyObject* pyfile = PyObject_CallMethod(
       py_descriptor_pool_, "FindFileContainingSymbol", "s#", symbol_name.data(),
       static_cast<Py_ssize_t>(symbol_name.size()));
@@ -149,7 +151,7 @@ bool PyDescriptorDatabase::FindFileContainingExtension(
     return false;
   }
 
-  ABSL_CHECK(PyGILState_Check());
+  py::gil_scoped_acquire acquire;
   PyObject* py_containing_type = PyObject_CallMethod(
       py_descriptor_pool_, "FindMessageTypeByName", "s#",
       containing_type.data(), static_cast<Py_ssize_t>(containing_type.size()));
