@@ -21,16 +21,16 @@
 #include <string>
 #include <utility>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/statusor.h"
 #include "common/value.h"
+#include "cel_expr_python/free_threading_mutex.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "google/protobuf/arena.h"
 #include <pybind11/pybind11.h>
 
 namespace cel_python {
-
-namespace py = ::pybind11;
 
 class PyCelArena;
 class PyCelEnvInternal;
@@ -47,13 +47,13 @@ class PyCelValue {
   PyCelValue(cel::Value& cel_value, std::shared_ptr<PyCelArena> arena,
              std::shared_ptr<PyCelEnvInternal> env);
 
-  // Move constructor and assignment.
-  PyCelValue(PyCelValue&& other) noexcept = default;
-  PyCelValue& operator=(PyCelValue&& other) noexcept = default;
+  // Move constructor.
+  PyCelValue(PyCelValue&& other) noexcept;
 
-  // Disallow copying.
+  // Disallow copying and move assignment.
   PyCelValue(const PyCelValue&) = delete;
   PyCelValue& operator=(const PyCelValue&) = delete;
+  PyCelValue& operator=(PyCelValue&&) = delete;
 
   virtual ~PyCelValue();
 
@@ -67,9 +67,10 @@ class PyCelValue {
                                PyMessageFactory* py_message_factory);
 
  protected:
+  mutable FreeThreadingMutex mutex_;
   cel::Value cel_value_;
-  PyObject* object_;
-  PyObject* plain_object_;
+  PyObject* object_ ABSL_GUARDED_BY(mutex_);
+  PyObject* plain_object_ ABSL_GUARDED_BY(mutex_);
   std::shared_ptr<PyCelArena> arena_;
   std::shared_ptr<PyCelEnvInternal> env_;
 };
@@ -83,22 +84,21 @@ class PyCelListItemAccessor : public PyCelValue {
       : PyCelValue(celValue, std::move(arena), std::move(env)), index_(index) {}
 
   // Move constructor.
-  PyCelListItemAccessor(PyCelListItemAccessor&& other) noexcept = default;
+  PyCelListItemAccessor(PyCelListItemAccessor&& other) noexcept;
 
   ~PyCelListItemAccessor() override = default;
 
-  // Extracts the element at the given index from the list and caches the
-  // result. This is called on demand when the python side accesses the value.
-  void ResolveElement();
   PyCelType Type() override;
   PyObject* Value() override;
   PyObject* PlainValue() override;
   std::string ToString() override;
 
  private:
+  void ResolveElementLocked() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   int index_;
-  bool resolved_ = false;
-  cel::Value element_value_;
+  bool resolved_ ABSL_GUARDED_BY(mutex_) = false;
+  cel::Value element_value_ ABSL_GUARDED_BY(mutex_);
 };
 
 // Variant of PyCelValue that is used to access a specific value from a map.
@@ -111,20 +111,21 @@ class PyCelMapItemAccessor : public PyCelValue {
         key_(std::move(key)) {}
 
   // Move constructor.
-  PyCelMapItemAccessor(PyCelMapItemAccessor&& other) noexcept = default;
+  PyCelMapItemAccessor(PyCelMapItemAccessor&& other) noexcept;
 
   ~PyCelMapItemAccessor() override = default;
 
-  void ResolveElement();
   PyCelType Type() override;
   PyObject* Value() override;
   PyObject* PlainValue() override;
   std::string ToString() override;
 
  private:
+  void ResolveElementLocked() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   cel::Value key_;
-  cel::Value element_value_;
-  bool resolved_ = false;
+  cel::Value element_value_ ABSL_GUARDED_BY(mutex_);
+  bool resolved_ ABSL_GUARDED_BY(mutex_) = false;
 };
 
 PyObject* CelValueToPyObject(const cel::Value& cel_value,

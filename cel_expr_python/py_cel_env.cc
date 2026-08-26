@@ -212,6 +212,7 @@ PyCelExpression PyCelEnv::Compile(const std::string& cel_expr,
 }
 
 PyCelExpression PyCelEnv::Deserialize(const std::string& serialized_expr) {
+  py::gil_scoped_release gil_release;
   return ThrowIfError(PyCelExpression::Deserialize(env_, serialized_expr));
 }
 

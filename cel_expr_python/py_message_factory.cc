@@ -21,8 +21,12 @@
 
 #include "absl/log/absl_check.h"
 #include "absl/log/absl_log.h"
+#include "cel_expr_python/free_threading_mutex.h"
+#include <pybind11/pybind11.h>
 
 namespace cel_python {
+
+namespace py = pybind11;
 
 PyMessageFactory::PyMessageFactory(PyObject* descriptor_pool) {
   py_descriptor_pool_ = descriptor_pool;
@@ -52,17 +56,26 @@ PyMessageFactory::~PyMessageFactory() {
     return;
   }
 
-  auto gil_state = PyGILState_Ensure();
-  Py_XDECREF(py_descriptor_pool_);
-  Py_XDECREF(py_func_GetMessageClass_);
-  Py_XDECREF(py_func_MergeFromString_);
-  for (auto const& [key, py_obj] : message_classes_) {
-    Py_XDECREF(py_obj);
+  if (!PyGILState_Check()) {
+    py::gil_scoped_acquire acquire;
+    Py_XDECREF(py_descriptor_pool_);
+    Py_XDECREF(py_func_GetMessageClass_);
+    Py_XDECREF(py_func_MergeFromString_);
+    for (auto const& [key, py_obj] : message_classes_) {
+      Py_XDECREF(py_obj);
+    }
+  } else {
+    Py_XDECREF(py_descriptor_pool_);
+    Py_XDECREF(py_func_GetMessageClass_);
+    Py_XDECREF(py_func_MergeFromString_);
+    for (auto const& [key, py_obj] : message_classes_) {
+      Py_XDECREF(py_obj);
+    }
   }
-  PyGILState_Release(gil_state);
 }
 
 PyObject* PyMessageFactory::GetMessageClass(const std::string& message_type) {
+  ABSL_CHECK(PyGILState_Check());
   if (py_descriptor_pool_ == nullptr) {
     PyErr_Format(PyExc_TypeError,
                  "Message type not found: %s, descriptor pool is unavailable.",
@@ -70,31 +83,38 @@ PyObject* PyMessageFactory::GetMessageClass(const std::string& message_type) {
     return nullptr;
   }
 
-  auto it = message_classes_.find(message_type);
-  if (it != message_classes_.end()) {
-    return it->second;
-  } else {
-    PyObject* descriptor =
-        PyObject_CallMethod(py_descriptor_pool_, "FindMessageTypeByName", "s",
-                            message_type.c_str());
-    if (!descriptor) {
-      PyErr_Format(PyExc_TypeError, "Message type not found: %s",
-                   message_type.c_str());
-      return nullptr;
+  {
+    FreeThreadingLockGuard lock(mutex_);
+    auto it = message_classes_.find(message_type);
+    if (it != message_classes_.end()) {
+      return it->second;
     }
-    PyObject* message_class =
-        PyObject_CallFunction(py_func_GetMessageClass_, "O", descriptor);
-    Py_DECREF(descriptor);
-
-    if (!message_class) {
-      PyErr_Format(PyExc_TypeError, "Couldn't find message class for type: %s",
-                   message_type.c_str());
-      return nullptr;
-    }
-
-    message_classes_[message_type] = message_class;
-    return message_class;
   }
+
+  PyObject* descriptor = PyObject_CallMethod(
+      py_descriptor_pool_, "FindMessageTypeByName", "s", message_type.c_str());
+  if (!descriptor) {
+    PyErr_Format(PyExc_TypeError, "Message type not found: %s",
+                 message_type.c_str());
+    return nullptr;
+  }
+  PyObject* message_class =
+      PyObject_CallFunction(py_func_GetMessageClass_, "O", descriptor);
+  Py_DECREF(descriptor);
+
+  if (!message_class) {
+    PyErr_Format(PyExc_TypeError, "Couldn't find message class for type: %s",
+                 message_type.c_str());
+    return nullptr;
+  }
+
+  FreeThreadingLockGuard lock(mutex_);
+  auto [it, inserted] = message_classes_.emplace(message_type, message_class);
+  if (!inserted) {
+    Py_DECREF(message_class);
+    return it->second;
+  }
+  return message_class;
 }
 
 PyObject* PyMessageFactory::FromString(const std::string& message_type,

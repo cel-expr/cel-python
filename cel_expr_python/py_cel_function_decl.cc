@@ -16,13 +16,10 @@
 
 #include <memory>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "env/config.h"
-#include "env/type_info.h"
 #include "cel_expr_python/py_cel_overload.h"
-#include "cel_expr_python/py_cel_type.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 

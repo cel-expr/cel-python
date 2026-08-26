@@ -31,6 +31,16 @@
 
 namespace cel_python {
 
+// Eagerly initializes pybind11 internal data structures (type casters,
+// exception translation tables, and instance maps) during module
+// initialization.
+//
+// This guarantees that pybind11's global internals are initialized on the main
+// thread at import time, preventing data races or lazy-initialization
+// contention when Status/exception conversions occur concurrently across
+// multiple threads.
+inline void InitPyErrorStatus() { pybind11::detail::get_internals(); }
+
 std::runtime_error StatusToException(const absl::Status& status);
 void ThrowIfError(const absl::Status& status);
 

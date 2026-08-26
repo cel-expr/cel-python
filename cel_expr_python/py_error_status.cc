@@ -103,8 +103,7 @@ static absl::Status& PendingPyError() {
   return *pending_py_error;
 }
 
-absl::Status PyErr_toStatus() {
-  py::gil_scoped_acquire acquire;
+static absl::Status PyErr_toStatusInternal() {
   PyObject* py_error = PyErr_Occurred();
   if (!py_error) {
     absl::Status status = PendingPyError();
@@ -135,8 +134,15 @@ absl::Status PyErr_toStatus() {
   return status;
 }
 
+absl::Status PyErr_toStatus() {
+  if (!PyGILState_Check()) {
+    py::gil_scoped_acquire acquire;
+    return PyErr_toStatusInternal();
+  }
+  return PyErr_toStatusInternal();
+}
+
 void PyErr_noteAndClear() {
-  py::gil_scoped_acquire acquire;
   if (!PyErr_Occurred()) {
     return;
   }

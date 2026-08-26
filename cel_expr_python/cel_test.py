@@ -21,6 +21,7 @@ import importlib.abc
 import sys
 from typing import Any
 
+from google.protobuf import message_factory
 from google.protobuf import duration_pb2 as duration_pb
 from google.protobuf import timestamp_pb2 as timestamp_pb
 from absl.testing import absltest
@@ -336,6 +337,32 @@ class _CelTestBase(absltest.TestCase):
         r"Unexpected value type for 'var_msg':"
         r" .*. \(Expected cel.expr.conformance.proto2.TestAllTypes\)",
     )
+
+  def testProto_cannotFindMessageClass(self):
+    orig_get_message_class = message_factory.GetMessageClass
+
+    def failing_get_message_class(descriptor):
+      del descriptor
+      raise TypeError(
+          "Couldn't build proto class because dependency X is missing"
+      )
+
+    try:
+      message_factory.GetMessageClass = failing_get_message_class
+      env = cel.NewEnv(options=self.options)
+      expr = env.compile(
+          "cel.expr.conformance.proto2.TestAllTypes{single_string: 'hello'}"
+      )
+      res = expr.eval(env.Activation())
+      with self.assertRaisesRegex(
+          TypeError, "Couldn't find message class for type"
+      ):
+        res.plain_value()
+      del res
+      del expr
+      del env
+    finally:
+      message_factory.GetMessageClass = orig_get_message_class
 
   def testEvalList(self):
     res: cel.Value = self._eval(

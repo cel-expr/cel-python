@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -36,6 +37,7 @@
 #include "common/type.h"
 #include "common/value.h"
 #include "common/value_kind.h"
+#include "cel_expr_python/free_threading_mutex.h"
 #include "cel_expr_python/py_cel_arena.h"
 #include "cel_expr_python/py_cel_env_internal.h"
 #include "cel_expr_python/py_cel_type.h"
@@ -58,11 +60,19 @@ void PyCelValue::DefinePythonBindings(py::module& m) {
       .def("type", &PyCelValue::Type)
       .def("value",
            [](PyCelValue& self) {
-             return py::reinterpret_borrow<py::object>(self.Value());
+             PyObject* obj = self.Value();
+             if (obj == nullptr) {
+               throw py::error_already_set();
+             }
+             return py::reinterpret_borrow<py::object>(obj);
            })
       .def("plain_value",
            [](PyCelValue& self) {
-             return py::reinterpret_borrow<py::object>(self.PlainValue());
+             PyObject* obj = self.PlainValue();
+             if (obj == nullptr) {
+               throw py::error_already_set();
+             }
+             return py::reinterpret_borrow<py::object>(obj);
            })
       .def("__repr__", &PyCelValue::ToString);
 
@@ -79,12 +89,28 @@ PyCelValue::PyCelValue(cel::Value& cel_value, std::shared_ptr<PyCelArena> arena,
       arena_(std::move(arena)),
       env_(std::move(env)) {}
 
+PyCelValue::PyCelValue(PyCelValue&& other) noexcept
+    : object_(nullptr), plain_object_(nullptr) {
+  FreeThreadingLockGuard lock(other.mutex_);
+  cel_value_ = std::move(other.cel_value_);
+  arena_ = std::move(other.arena_);
+  env_ = std::move(other.env_);
+  object_ = other.object_;
+  plain_object_ = other.plain_object_;
+  other.object_ = nullptr;
+  other.plain_object_ = nullptr;
+}
+
 PyCelValue::~PyCelValue() {
   if (object_ || plain_object_) {
-    auto gil_state = PyGILState_Ensure();
-    Py_XDECREF(object_);
-    Py_XDECREF(plain_object_);
-    PyGILState_Release(gil_state);
+    if (!PyGILState_Check()) {
+      py::gil_scoped_acquire acquire;
+      Py_XDECREF(object_);
+      Py_XDECREF(plain_object_);
+    } else {
+      Py_XDECREF(object_);
+      Py_XDECREF(plain_object_);
+    }
   }
 }
 
@@ -92,12 +118,13 @@ PyCelType PyCelValue::Type() { return PyCelType::ForCelValue(cel_value_); }
 
 PyObject* PyCelValue::Value() {
   ABSL_CHECK(PyGILState_Check());
+  FreeThreadingLockGuard lock(mutex_);
   if (object_) {
     return object_;
   }
   object_ = CelValueToPyObject(cel_value_, env_, arena_,
                                /*plain_value=*/false);
-  if (object_ == nullptr) {
+  if (object_ == nullptr && !PyErr_Occurred()) {
     PyErr_SetString(PyExc_AssertionError, "Cannot create object");
   }
 
@@ -106,12 +133,13 @@ PyObject* PyCelValue::Value() {
 
 PyObject* PyCelValue::PlainValue() {
   ABSL_CHECK(PyGILState_Check());
+  FreeThreadingLockGuard lock(mutex_);
   if (plain_object_) {
     return plain_object_;
   }
   plain_object_ = CelValueToPyObject(cel_value_, env_, arena_,
                                      /*plain_value=*/true);
-  if (plain_object_ == nullptr) {
+  if (plain_object_ == nullptr && !PyErr_Occurred()) {
     PyErr_SetString(PyExc_AssertionError, "Cannot create object");
   }
 
@@ -127,9 +155,12 @@ PyCelValueProvider::PyCelValueProvider(std::string name, PyObject* value,
 }
 
 PyCelValueProvider::~PyCelValueProvider() {
-  auto gil_state = PyGILState_Ensure();
-  Py_DECREF(py_object_);
-  PyGILState_Release(gil_state);
+  if (!PyGILState_Check()) {
+    py::gil_scoped_acquire acquire;
+    Py_DECREF(py_object_);
+  } else {
+    Py_DECREF(py_object_);
+  }
 }
 
 cel::Value PyCelValueProvider::Provide(
@@ -145,7 +176,15 @@ cel::Value PyCelValueProvider::Provide(
   return *converted_value;
 }
 
-void PyCelListItemAccessor::ResolveElement() {
+PyCelListItemAccessor::PyCelListItemAccessor(
+    PyCelListItemAccessor&& other) noexcept
+    : PyCelValue(std::move(other)), index_(other.index_) {
+  FreeThreadingLockGuard lock(other.mutex_);
+  resolved_ = other.resolved_;
+  element_value_ = std::move(other.element_value_);
+}
+
+void PyCelListItemAccessor::ResolveElementLocked() {
   if (resolved_) {
     return;
   }
@@ -163,47 +202,61 @@ void PyCelListItemAccessor::ResolveElement() {
 }
 
 PyCelType PyCelListItemAccessor::Type() {
-  auto gil_state = PyGILState_Ensure();
-  ResolveElement();
-  PyGILState_Release(gil_state);
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
   return PyCelType::ForCelValue(element_value_);
 }
 
 PyObject* PyCelListItemAccessor::Value() {
   ABSL_CHECK(PyGILState_Check());
+  FreeThreadingLockGuard lock(mutex_);
   if (object_) {
     return object_;
   }
 
-  ResolveElement();
+  ResolveElementLocked();
 
   object_ = CelValueToPyObject(element_value_, env_, arena_,
                                /*plain_value=*/false);
+  if (object_ == nullptr && !PyErr_Occurred()) {
+    PyErr_SetString(PyExc_AssertionError, "Cannot create object");
+  }
   return object_;
 }
 
 PyObject* PyCelListItemAccessor::PlainValue() {
   ABSL_CHECK(PyGILState_Check());
+  FreeThreadingLockGuard lock(mutex_);
   if (plain_object_) {
     return plain_object_;
   }
 
-  ResolveElement();
+  ResolveElementLocked();
 
   plain_object_ =
       CelValueToPyObject(element_value_, env_, arena_, /*plain_value=*/true);
+  if (plain_object_ == nullptr && !PyErr_Occurred()) {
+    PyErr_SetString(PyExc_AssertionError, "Cannot create object");
+  }
   return plain_object_;
 }
 
 std::string PyCelListItemAccessor::ToString() {
-  auto gil_state = PyGILState_Ensure();
-  ResolveElement();
-  std::string result = element_value_.DebugString();
-  PyGILState_Release(gil_state);
-  return result;
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
+  return element_value_.DebugString();
 }
 
-void PyCelMapItemAccessor::ResolveElement() {
+PyCelMapItemAccessor::PyCelMapItemAccessor(
+    PyCelMapItemAccessor&& other) noexcept
+    : PyCelValue(std::move(other)) {
+  FreeThreadingLockGuard lock(other.mutex_);
+  key_ = std::move(other.key_);
+  element_value_ = std::move(other.element_value_);
+  resolved_ = other.resolved_;
+}
+
+void PyCelMapItemAccessor::ResolveElementLocked() {
   if (resolved_) {
     return;
   }
@@ -220,44 +273,49 @@ void PyCelMapItemAccessor::ResolveElement() {
 }
 
 PyCelType PyCelMapItemAccessor::Type() {
-  auto gil_state = PyGILState_Ensure();
-  ResolveElement();
-  PyGILState_Release(gil_state);
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
   return PyCelType::ForCelValue(element_value_);
 }
 
 PyObject* PyCelMapItemAccessor::Value() {
   ABSL_CHECK(PyGILState_Check());
+  FreeThreadingLockGuard lock(mutex_);
   if (object_) {
     return object_;
   }
 
-  ResolveElement();
+  ResolveElementLocked();
 
   object_ = CelValueToPyObject(element_value_, env_, arena_,
                                /*plain_value=*/false);
+  if (object_ == nullptr && !PyErr_Occurred()) {
+    PyErr_SetString(PyExc_AssertionError, "Cannot create object");
+  }
   return object_;
 }
 
 PyObject* PyCelMapItemAccessor::PlainValue() {
   ABSL_CHECK(PyGILState_Check());
+  FreeThreadingLockGuard lock(mutex_);
   if (plain_object_) {
     return plain_object_;
   }
 
-  ResolveElement();
+  ResolveElementLocked();
 
   plain_object_ =
       CelValueToPyObject(element_value_, env_, arena_, /*plain_value=*/true);
+  if (plain_object_ == nullptr && !PyErr_Occurred()) {
+    PyErr_SetString(PyExc_AssertionError, "Cannot create object");
+  }
   return plain_object_;
 }
 
 std::string PyCelMapItemAccessor::ToString() {
-  auto gil_state = PyGILState_Ensure();
-  ResolveElement();
-  std::string result = element_value_.DebugString();
-  PyGILState_Release(gil_state);
-  return result;
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
+  return element_value_.DebugString();
 }
 
 // This should be called with the GIL held.
@@ -267,6 +325,7 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
                              bool plain_value) {
   switch (cel_value.kind()) {
     case cel::ValueKind::kNull: {
+      Py_INCREF(Py_None);
       return Py_None;
     }
     case cel::ValueKind::kBool: {

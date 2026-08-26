@@ -22,6 +22,7 @@
 #include <string_view>  // IWYU pragma: keep - Needed for string_view in OSS
 
 #include "google/protobuf/descriptor.pb.h"
+#include "absl/strings/string_view.h"
 #include "google/protobuf/descriptor_database.h"
 
 namespace cel_python {

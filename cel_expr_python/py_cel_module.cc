@@ -24,11 +24,13 @@
 #include "cel_expr_python/py_cel_python_extension.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_cel_value.h"
+#include "cel_expr_python/py_error_status.h"
 #include <pybind11/pybind11.h>
 
 namespace cel_python {
 
-PYBIND11_MODULE(cel, m) {
+PYBIND11_MODULE(cel, m, pybind11::mod_gil_not_used()) {
+  InitPyErrorStatus();
   m.doc() = "Python bindings for CEL.";
 
   PyCelArena::DefinePythonBindings(m);

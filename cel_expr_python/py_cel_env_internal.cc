@@ -20,12 +20,12 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/call_once.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/absl_check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
-#include "absl/synchronization/mutex.h"
 #include "checker/type_checker_builder.h"
 #include "common/container.h"
 #include "common/function_descriptor.h"
@@ -34,6 +34,7 @@
 #include "compiler/compiler.h"
 #include "env/config.h"
 #include "env/env.h"
+#include "env/env_runtime.h"
 #include "env/env_std_extensions.h"
 #include "env/runtime_std_extensions.h"
 #include "env/type_info.h"
@@ -107,7 +108,23 @@ PyCelEnvInternal::PyCelEnvInternal(
           return extension->ConfigureRuntime(runtime_builder, runtime_options);
         });
   }
+
+  // PyCelType::FromCelType performs a deep copy and does not keep a
+  // reference to any of the arena backed cel::Type instances, so it is safe to
+  // use a local arena.
+  google::protobuf::Arena arena;
+  for (const cel::Config::VariableConfig& variable_config :
+       env_config_.GetConfig().GetVariableConfigs()) {
+    auto status_or_type = cel::TypeInfoToType(variable_config.type_info,
+                                              descriptor_pool_.get(), &arena);
+    if (status_or_type.ok()) {
+      variable_types_[variable_config.name] =
+          PyCelType::FromCelType(*status_or_type);
+    }
+  }
 }
+
+PyCelEnvInternal::~PyCelEnvInternal() = default;
 
 absl::StatusOr<std::shared_ptr<PyCelEnvInternal>>
 PyCelEnvInternal::NewCelEnvInternal(
@@ -230,12 +247,8 @@ PyCelEnvInternal::NewCelEnvInternal(
                            std::move(extension_handles), impls));
 }
 
-absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler() const {
-  absl::MutexLock lock(mutex_);
-  if (compiler_) {
-    return compiler_.get();
-  }
-
+absl::StatusOr<std::unique_ptr<cel::Compiler>> PyCelEnvInternal::BuildCompiler()
+    const {
   const cel::Config& config = env_config_.GetConfig();
 
   CEL_PYTHON_ASSIGN_OR_RETURN(
@@ -259,28 +272,19 @@ absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler() const {
   }
   checker_builder.SetExpressionContainer(std::move(container));
 
-  // Convert variable types from cel::TypeInfo to PyCelType.
-  google::protobuf::Arena* arena = checker_builder.arena();
-  for (const cel::Config::VariableConfig& variable_config :
-       config.GetVariableConfigs()) {
-    CEL_PYTHON_ASSIGN_OR_RETURN(
-        cel::Type cel_type, cel::TypeInfoToType(variable_config.type_info,
-                                                descriptor_pool_.get(), arena));
-    PyCelType py_cel_type = PyCelType::FromCelType(cel_type);
-    variable_types_[variable_config.name] = py_cel_type;
-  }
-
-  CEL_PYTHON_ASSIGN_OR_RETURN(compiler_, compiler_builder->Build());
-  return compiler_.get();
+  return compiler_builder->Build();
 }
 
-absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
-    RuntimeMode runtime_mode) const {
-  absl::MutexLock lock(mutex_);
-  if (auto it = runtimes_.find(runtime_mode); it != runtimes_.end()) {
-    return it->second.get();
+absl::StatusOr<const cel::Compiler*> PyCelEnvInternal::GetCompiler() const {
+  absl::call_once(compiler_once_, [this] { compiler_ = BuildCompiler(); });
+  if (!compiler_.ok()) {
+    return compiler_.status();
   }
+  return (*compiler_).get();
+}
 
+absl::StatusOr<std::unique_ptr<cel::Runtime>> PyCelEnvInternal::BuildRuntime(
+    RuntimeMode runtime_mode) const {
   cel::RuntimeOptions opts;
   opts.container = env_config_.GetConfig().GetContainerConfig().name;
   opts.enable_empty_wrapper_null_unboxing = true;
@@ -298,6 +302,10 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
   CEL_PYTHON_RETURN_IF_ERROR(cel::EnableReferenceResolver(
       builder, cel::ReferenceResolverEnabled::kAlways));
 
+  // The local arena is only used as scratch space for intermediate cel::Type
+  // objects in TypeInfoToType. Parameters only retain cel::Kind (enum), and
+  // return types are converted to self-contained PyCelType value objects.
+  google::protobuf::Arena arena;
   for (const cel::Config::FunctionConfig& function_config :
        GetEnvConfig().GetConfig().GetFunctionConfigs()) {
     for (const cel::Config::FunctionOverloadConfig& overload_config :
@@ -306,14 +314,20 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
       if (it == function_impls_.end()) {
         continue;
       }
-      py::object py_function = it->second;
+      py::object py_function;
+      if (!PyGILState_Check()) {
+        py::gil_scoped_acquire acquire;
+        py_function = it->second;
+      } else {
+        py_function = it->second;
+      }
       std::vector<cel::Kind> param_kinds;
       param_kinds.reserve(overload_config.parameters.size());
       for (const cel::Config::TypeInfo& parameter :
            overload_config.parameters) {
         CEL_PYTHON_ASSIGN_OR_RETURN(
             cel::Type type,
-            cel::TypeInfoToType(parameter, descriptor_pool_.get(), &arena_));
+            cel::TypeInfoToType(parameter, descriptor_pool_.get(), &arena));
         param_kinds.push_back(static_cast<cel::Kind>(type.kind()));
       }
       cel::FunctionDescriptor descriptor(
@@ -322,23 +336,41 @@ absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
       CEL_PYTHON_ASSIGN_OR_RETURN(
           cel::Type return_type,
           cel::TypeInfoToType(overload_config.return_type,
-                              descriptor_pool_.get(), &arena_));
+                              descriptor_pool_.get(), &arena));
       CEL_PYTHON_RETURN_IF_ERROR(builder.function_registry().Register(
-          descriptor, std::make_unique<PyCelFunctionAdapter>(
-                          function_config.name,
-                          PyCelType::FromCelType(return_type), py_function)));
+          descriptor,
+          std::make_unique<PyCelFunctionAdapter>(
+              function_config.name, PyCelType::FromCelType(return_type),
+              std::move(py_function))));
     }
   }
-  CEL_PYTHON_ASSIGN_OR_RETURN(std::unique_ptr<cel::Runtime> runtime,
-                              std::move(builder).Build());
-  const cel::Runtime* runtime_ptr = runtime.get();
-  runtimes_[runtime_mode] = std::move(runtime);
-  return runtime_ptr;
+  return std::move(builder).Build();
+}
+
+absl::StatusOr<const cel::Runtime*> PyCelEnvInternal::GetRuntime(
+    RuntimeMode runtime_mode) const {
+  switch (runtime_mode) {
+    case kStandard:
+      absl::call_once(standard_runtime_once_,
+                      [this] { standard_runtime_ = BuildRuntime(kStandard); });
+      if (!standard_runtime_.ok()) {
+        return standard_runtime_.status();
+      }
+      return (*standard_runtime_).get();
+    case kStandardIgnoreWarnings:
+      absl::call_once(standard_ignore_warnings_runtime_once_, [this] {
+        standard_ignore_warnings_runtime_ =
+            BuildRuntime(kStandardIgnoreWarnings);
+      });
+      if (!standard_ignore_warnings_runtime_.ok()) {
+        return standard_ignore_warnings_runtime_.status();
+      }
+      return (*standard_ignore_warnings_runtime_).get();
+  }
 }
 
 const PyCelType& PyCelEnvInternal::GetVariableType(
     const std::string& name) const {
-  absl::MutexLock lock(mutex_);
   auto it = variable_types_.find(name);
   if (it != variable_types_.end()) {
     return it->second;
@@ -360,8 +392,12 @@ CelExtensionHandle::CelExtensionHandle(CelExtensionHandle&& other)
 
 CelExtensionHandle::~CelExtensionHandle() {
   if (py_extension_ != nullptr) {
-    py::gil_scoped_acquire acquire;
-    Py_DECREF(py_extension_);
+    if (!PyGILState_Check()) {
+      py::gil_scoped_acquire acquire;
+      Py_DECREF(py_extension_);
+    } else {
+      Py_DECREF(py_extension_);
+    }
   }
 }
 

@@ -43,6 +43,7 @@
 #include "parser/parser_interface.h"
 #include "runtime/embedder_context.h"
 #include "runtime/runtime.h"
+#include "cel_expr_python/free_threading_mutex.h"
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_arena.h"
 #include "cel_expr_python/py_cel_env_internal.h"
@@ -110,7 +111,7 @@ absl::StatusOr<PyCelExpression> PyCelExpression::Compile(
 
   if (disable_check) {
     CEL_PYTHON_ASSIGN_OR_RETURN(auto s, cel::NewSource(cel_expr, "<input>"));
-    PY_CEL_PYTHON_ASSIGN_OR_RETURN(auto ast, compiler->GetParser().Parse(*s));
+    CEL_PYTHON_ASSIGN_OR_RETURN(auto ast, compiler->GetParser().Parse(*s));
     ParsedExpr parsed_expr;
     CEL_PYTHON_RETURN_IF_ERROR(cel::AstToParsedExpr(*ast, &parsed_expr));
     return PyCelExpression(parsed_expr, env);
@@ -126,6 +127,15 @@ absl::StatusOr<PyCelExpression> PyCelExpression::Compile(
   CEL_PYTHON_RETURN_IF_ERROR(cel::AstToCheckedExpr(*ast, &checked_expr));
   return PyCelExpression(checked_expr, env);
 }
+
+PyCelExpression::PyCelExpression(PyCelExpression&& other) noexcept {
+  FreeThreadingLockGuard lock(other.mutex_);
+  expr_ = std::move(other.expr_);
+  env_ = std::move(other.env_);
+  cel_program_ = std::move(other.cel_program_);
+}
+
+PyCelExpression::~PyCelExpression() = default;
 
 PyCelType PyCelExpression::GetReturnType() {
   if (!std::holds_alternative<CheckedExpr>(expr_)) {
@@ -144,36 +154,42 @@ PyCelType PyCelExpression::GetReturnType() {
   return PyCelType::FromTypeProto(it->second);
 }
 
+absl::StatusOr<const cel::Program*> PyCelExpression::GetProgram() {
+  FreeThreadingLockGuard lock(mutex_);
+  if (cel_program_) {
+    return cel_program_.get();
+  }
+  if (std::holds_alternative<ParsedExpr>(expr_)) {
+    CEL_PYTHON_ASSIGN_OR_RETURN(
+        const cel::Runtime* runtime,
+        env_->GetRuntime(PyCelEnvInternal::kStandardIgnoreWarnings));
+    CEL_PYTHON_ASSIGN_OR_RETURN(
+        cel_program_, cel::extensions::ProtobufRuntimeAdapter::CreateProgram(
+                          *runtime, std::get<ParsedExpr>(expr_)));
+  } else {
+    CEL_PYTHON_ASSIGN_OR_RETURN(const cel::Runtime* runtime,
+                                env_->GetRuntime(PyCelEnvInternal::kStandard));
+    CEL_PYTHON_ASSIGN_OR_RETURN(
+        cel_program_, cel::extensions::ProtobufRuntimeAdapter::CreateProgram(
+                          *runtime, std::get<CheckedExpr>(expr_)));
+  }
+  return cel_program_.get();
+}
+
 absl::StatusOr<PyCelValue> PyCelExpression::Eval(
     const PyCelActivation& activation) {
   ABSL_CHECK(PyGILState_Check());
-  if (cel_program_ == nullptr) {
-    if (std::holds_alternative<ParsedExpr>(expr_)) {
-      PY_CEL_PYTHON_ASSIGN_OR_RETURN(
-          const cel::Runtime* runtime,
-          env_->GetRuntime(PyCelEnvInternal::kStandardIgnoreWarnings));
-      PY_CEL_PYTHON_ASSIGN_OR_RETURN(
-          cel_program_, cel::extensions::ProtobufRuntimeAdapter::CreateProgram(
-                            *runtime, std::get<ParsedExpr>(expr_)));
-    } else {
-      PY_CEL_PYTHON_ASSIGN_OR_RETURN(
-          const cel::Runtime* runtime,
-          env_->GetRuntime(PyCelEnvInternal::kStandard));
-      PY_CEL_PYTHON_ASSIGN_OR_RETURN(
-          cel_program_, cel::extensions::ProtobufRuntimeAdapter::CreateProgram(
-                            *runtime, std::get<CheckedExpr>(expr_)));
-    }
-  }
+  CEL_PYTHON_ASSIGN_OR_RETURN(const cel::Program* program, GetProgram());
   std::shared_ptr<PyCelArena> arena = activation.GetArena();
   std::shared_ptr<PyCelEnvInternal> env = activation.GetEnv();
   cel::EmbedderContext embedder_context = cel::EmbedderContext::From(&env);
   cel::EvaluateOptions options;
   options.message_factory = env->GetMessageFactory();
   options.embedder_context = &embedder_context;
-  PY_CEL_PYTHON_ASSIGN_OR_RETURN(
+  CEL_PYTHON_ASSIGN_OR_RETURN(
       cel::Value result,
-      cel_program_->Evaluate(arena->GetArena(), *activation.GetActivation(),
-                             std::move(options)));
+      program->Evaluate(arena->GetArena(), *activation.GetActivation(),
+                        std::move(options)));
   return PyCelValue(result, arena, std::move(env));
 }
 
@@ -190,7 +206,6 @@ std::string PyCelExpression::Serialize() const {
 absl::StatusOr<PyCelExpression> PyCelExpression::Deserialize(
     const std::shared_ptr<PyCelEnvInternal>& env,
     const std::string& serialized_expr) {
-  ABSL_CHECK(PyGILState_Check());
   google::protobuf::Any any;
   if (!any.ParseFromString(serialized_expr)) {
     return absl::InvalidArgumentError(

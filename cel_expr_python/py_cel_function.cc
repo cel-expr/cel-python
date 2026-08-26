@@ -95,12 +95,14 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
                                        /*plain_value=*/true));
   }
   PyObject* result = PyObject_CallObject(py_function_.ptr(), py_args);
+  Py_DECREF(py_args);
   absl::Status status = PyErr_toStatus();
   if (!status.ok()) {
+    Py_XDECREF(result);
     return cel::ErrorValue(status);
   }
 
-  return PyObjectToCelValue(
+  absl::StatusOr<cel::Value> cel_result = PyObjectToCelValue(
       result, return_type_,
       [this]() {
         return absl::StrFormat(
@@ -108,6 +110,8 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
             PyUnicode_AsUTF8(PyObject_Repr(py_function_.ptr())));
       },
       env, context.arena());
-};
+  Py_XDECREF(result);
+  return cel_result;
+}
 
 }  // namespace cel_python

@@ -80,14 +80,14 @@ class CelExtension {
 //   CEL_EXTENSION_MODULE(sample_cel_ext, SampleCelExtension);
 //
 #define CEL_EXTENSION_MODULE(module_name, class_name)                      \
-  PYBIND11_MODULE(module_name, m) {                                        \
+  PYBIND11_MODULE(module_name, m, pybind11::mod_gil_not_used()) {          \
     pybind11::module_::import(CEL_MODULE_NAME);                            \
     pybind11::class_<class_name, cel_python::CelExtension>(m, #class_name) \
         .def(pybind11::init<>());                                          \
   }
 
 #define CEL_VERSIONED_EXTENSION_MODULE(module_name, class_name)            \
-  PYBIND11_MODULE(module_name, m) {                                        \
+  PYBIND11_MODULE(module_name, m, pybind11::mod_gil_not_used()) {          \
     pybind11::module_::import(CEL_MODULE_NAME);                            \
     pybind11::class_<class_name, cel_python::CelExtension>(m, #class_name) \
         .def(pybind11::init<>())                                           \

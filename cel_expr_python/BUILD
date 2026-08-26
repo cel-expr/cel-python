@@ -29,6 +29,7 @@ pybind_library(
         "py_message_factory.cc",
     ],
     hdrs = [
+        "free_threading_mutex.h",
         "py_cel_activation.h",
         "py_cel_arena.h",
         "py_cel_env.h",
@@ -46,6 +47,7 @@ pybind_library(
         "py_descriptor_database.h",
         "py_message_factory.h",
     ],
+    tags = ["freethreading_compatible"],
     visibility = [":__subpackages__"],
     deps = [
         ":cel_extension",
@@ -113,6 +115,7 @@ pybind_extension(
         "//visibility:public",
     ],
     deps = [
+        ":cel_extension",
         ":cel_pybind_lib",
     ],
 )
@@ -127,6 +130,7 @@ pybind_library(
         "cel_extension.h",
         "py_error_status.h",
     ],
+    tags = ["freethreading_compatible"],
     visibility = ["//visibility:public"],
     deps = [
         ":status_macros",
@@ -161,6 +165,7 @@ py_test(
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
         "@com_google_protobuf//:protobuf",
+        "@com_google_protobuf//:protobuf_python",
     ] + select({
         "@platforms//os:windows": [],
         "//conditions:default": [":cel"],

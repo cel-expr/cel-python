@@ -199,6 +199,47 @@ class CelParallelTest(absltest.TestCase):
   def testSequentialCompilation(self):
     self._test_compile(multi_threaded=False)
 
+  def testSharedValueConcurrentAccess(self):
+    expr_scalar = self.env.compile("var_int * 2")
+    expr_list = self.env.compile("[var_int, var_int + 1, var_int + 2]")
+    expr_map = self.env.compile("{'key': var_str, 'value': var_int}")
+
+    def run_concurrent_value_test(n: int):
+      val_scalar = expr_scalar.eval(data={"var_int": n})
+      val_list = expr_list.eval(data={"var_int": n})
+      val_map = expr_map.eval(data={"var_str": f"k_{n}", "var_int": n})
+
+      def read_values(_):
+        # Concurrently access plain_value, value, type, and repr
+        # on shared instances
+        self.assertEqual(val_scalar.plain_value(), n * 2)
+        self.assertEqual(val_scalar.value(), n * 2)
+        self.assertEqual(val_scalar.type(), cel.Type.INT)
+        self.assertNotEmpty(str(val_scalar))
+
+        plain_list = val_list.plain_value()
+        self.assertEqual(plain_list, [n, n + 1, n + 2])
+        list_accessors = val_list.value()
+        for idx, item in enumerate(list_accessors):
+          self.assertEqual(item.plain_value(), n + idx)
+          self.assertEqual(item.value(), n + idx)
+          self.assertEqual(item.type(), cel.Type.INT)
+          self.assertNotEmpty(str(item))
+
+        plain_map = val_map.plain_value()
+        self.assertEqual(plain_map, {"key": f"k_{n}", "value": n})
+        map_accessors = val_map.value()
+        self.assertEqual(map_accessors["key"].plain_value(), f"k_{n}")
+        self.assertEqual(map_accessors["key"].value(), f"k_{n}")
+        self.assertEqual(map_accessors["value"].plain_value(), n)
+        self.assertEqual(map_accessors["value"].value(), n)
+
+      with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(read_values, range(50)))
+
+    for i in range(10):
+      run_concurrent_value_test(i)
+
 
 if __name__ == "__main__":
   absltest.main()

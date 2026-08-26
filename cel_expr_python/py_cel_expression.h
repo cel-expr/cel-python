@@ -22,8 +22,10 @@
 
 #include "cel/expr/checked.pb.h"
 #include "cel/expr/syntax.pb.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/status/statusor.h"
 #include "runtime/runtime.h"
+#include "cel_expr_python/free_threading_mutex.h"
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_cel_value.h"
@@ -38,14 +40,15 @@ class PyCelExpression {
  public:
   static void DefinePythonBindings(pybind11::module& m);
 
-  PyCelExpression(PyCelExpression&& other) = default;
+  PyCelExpression(PyCelExpression&& other) noexcept;
+  ~PyCelExpression();
 
   PyCelExpression(const cel::expr::ParsedExpr& parsed_expr,
                   std::shared_ptr<PyCelEnvInternal> env)
-      : expr_(std::move(parsed_expr)), env_(std::move(env)) {}
+      : expr_(parsed_expr), env_(std::move(env)) {}
   PyCelExpression(const cel::expr::CheckedExpr& checked_expr,
                   std::shared_ptr<PyCelEnvInternal> env)
-      : expr_(std::move(checked_expr)), env_(std::move(env)) {}
+      : expr_(checked_expr), env_(std::move(env)) {}
 
   PyCelType GetReturnType();
 
@@ -62,10 +65,13 @@ class PyCelExpression {
       const std::string& serialized_expr);
 
  private:
+  absl::StatusOr<const cel::Program*> GetProgram();
+
   std::variant<cel::expr::ParsedExpr, cel::expr::CheckedExpr>
       expr_;
   std::shared_ptr<PyCelEnvInternal> env_;
-  std::unique_ptr<cel::Program> cel_program_;
+  mutable FreeThreadingMutex mutex_;
+  std::unique_ptr<cel::Program> cel_program_ ABSL_GUARDED_BY(mutex_);
 };
 
 }  // namespace cel_python

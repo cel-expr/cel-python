@@ -39,8 +39,15 @@ PyDescriptorDatabase::PyDescriptorDatabase(PyObject* py_descriptor_pool)
 }
 
 PyDescriptorDatabase::~PyDescriptorDatabase() {
-  py::gil_scoped_acquire acquire;
-  Py_XDECREF(py_descriptor_pool_);
+  if (py_descriptor_pool_ == nullptr) {
+    return;
+  }
+  if (!PyGILState_Check()) {
+    py::gil_scoped_acquire acquire;
+    Py_XDECREF(py_descriptor_pool_);
+  } else {
+    Py_XDECREF(py_descriptor_pool_);
+  }
 }
 
 // Find a file by file name.  Fills in in *output and returns true if found.

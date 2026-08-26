@@ -20,7 +20,9 @@
 
 #include <string>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
+#include "cel_expr_python/free_threading_mutex.h"
 
 namespace cel_python {
 
@@ -37,7 +39,9 @@ class PyMessageFactory {
   PyObject* py_descriptor_pool_;
   PyObject* py_func_GetMessageClass_;  // NOLINT - Python function name.
   PyObject* py_func_MergeFromString_;  // NOLINT - Python function name.
-  absl::flat_hash_map<std::string, PyObject*> message_classes_;
+  mutable FreeThreadingMutex mutex_;
+  absl::flat_hash_map<std::string, PyObject*> message_classes_
+      ABSL_GUARDED_BY(mutex_);
 };
 
 }  // namespace cel_python

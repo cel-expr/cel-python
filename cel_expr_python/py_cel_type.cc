@@ -29,6 +29,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
+#include "common/ast.h"
 #include "common/kind.h"
 #include "common/signature.h"
 #include "common/type.h"
