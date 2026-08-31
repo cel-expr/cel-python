@@ -803,7 +803,7 @@ class _CelTestBase(absltest.TestCase):
       self.env.compile("'Hello,' # 'World!'", disable_check=True)
     if self.options.enable_pratt_parser:
       self.assertIn(
-          "1:10: unexpected character\n"
+          "1:10: Syntax error: unexpected character\n"
           " | 'Hello,' # 'World!'\n"
           " | .........^",
           str(e.exception),
