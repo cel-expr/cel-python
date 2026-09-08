@@ -11,7 +11,7 @@ pybind_extension(
         "ext_bindings.pyi",
         "//cel_expr_python:cel",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//third_party/cel/python:friends"],
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_cel_cpp//compiler",
@@ -28,7 +28,7 @@ pybind_extension(
         "ext_encoders.pyi",
         "//cel_expr_python:cel",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//third_party/cel/python:friends"],
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_absl//absl/status",
@@ -48,7 +48,7 @@ pybind_extension(
         "ext_lists.pyi",
         "//cel_expr_python:cel",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//third_party/cel/python:friends"],
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_absl//absl/status",
@@ -69,7 +69,7 @@ pybind_extension(
         "ext_math.pyi",
         "//cel_expr_python:cel",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//third_party/cel/python:friends"],
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_absl//absl/status",
@@ -91,7 +91,7 @@ pybind_extension(
         "ext_optional.pyi",
         "//cel_expr_python:cel",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//third_party/cel/python:friends"],
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_absl//absl/status",
@@ -114,7 +114,7 @@ pybind_extension(
         "ext_proto.pyi",
         "//cel_expr_python:cel",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//third_party/cel/python:friends"],
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_cel_cpp//compiler",
@@ -131,7 +131,7 @@ pybind_extension(
         "ext_strings.pyi",
         "//cel_expr_python:cel",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//third_party/cel/python:friends"],
     deps = [
         "//cel_expr_python:cel_extension",
         "@com_google_absl//absl/status",
