@@ -2,47 +2,11 @@ load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_python//python:py_test.bzl", "py_test")
 
-package(default_visibility = ["//visibility:private"])
+package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])
 
 exports_files(["LICENSE"])
-
-package_group(
-    name = "friends",
-    includes = [
-        ":internal",
-    ],
-    packages = [
-        "//ads/adsml/steelmill/cello/...",
-        "//assistant/quality/gia_retrospec/...",
-        "//cloud/ai/dialogflow/foodai/ordering/...",
-        "//cloud/ai/platform/orcas/groot/...",
-        "//cloud/capacity/delos/...",
-        "//cloud/databases/console/adk/surface_agents/database_o11y_agent/...",
-        "//cloud/duet/cloudassist/event_router/...",
-        "//cloud/serverless/genai/...",
-        "//communication/rtctools/pcm/core/...",
-        "//corp/legal/removals/...",
-        "//enterprise/crm/support/intelligence/auto_eval/...",
-        "//enterprise/gcbp/genai/agent_sentinel/...",
-        "//evaluation/autoraters/wrapper/...",
-        "//finance_org/cloud_transformation/audit_bugs/approval_service_integration/...",
-        "//gdm/science/verified_agents/policy_dsl/...",
-        "//geo/engprod/georails/...",
-        "//java/com/google/apps/mcp/testing/...",
-        "//java/com/google/cloud/revenue/revrec/...",
-        "//java/com/google/maps/trust/firetruck/...",
-        "//learning/agents/orcas/framework/...",
-        "//learning/tfx/users/gpay_team/tfx_v2/tflex/finserv/consumer/dre/...",
-        "//ops/security/ai/agentic/...",
-        "//ops/security/investigations/vimes/...",
-        "//ops/security/vulncc/agents/vulnact/...",
-        "//ux/research/kagi/agent/...",
-        "//wireless/android/pixel/testtools/stance/...",
-        "//wireless/android/pixel/testtools/systemhealth/...",
-    ],
-)
 
 # For Python programs using CEL.
 pybind_library(
@@ -147,9 +111,6 @@ pybind_extension(
         "py_cel_module.cc",
     ],
     data = ["cel.pyi"],
-    visibility = [
-        ":friends",
-    ],
     deps = [
         ":cel_extension",
         ":cel_pybind_lib",
@@ -167,7 +128,6 @@ pybind_library(
         "py_error_status.h",
     ],
     tags = ["freethreading_compatible"],
-    visibility = [":friends"],
     deps = [
         ":status_macros",
         "@com_google_absl//absl/base:no_destructor",
@@ -185,7 +145,6 @@ pybind_library(
 cc_library(
     name = "status_macros",
     hdrs = ["status_macros.h"],
-    visibility = [":friends"],
     deps = [
         "@com_google_absl//absl/status",
     ],
@@ -259,5 +218,4 @@ platform(
         "@platforms//os:osx",
         "@platforms//cpu:x86_64",
     ],
-    visibility = ["//visibility:public"],
 )
