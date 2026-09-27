@@ -106,6 +106,18 @@ class CelParallelTest(absltest.TestCase):
             "var_int_map": cel.Type.Map(cel.Type.INT, cel.Type.STRING),
             "var_msg": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
         },
+        functions=[
+            cel.FunctionDecl(
+                "custom_fn",
+                [
+                    cel.Overload(
+                        "custom_fn_int",
+                        return_type=cel.Type.INT,
+                        parameters=[cel.Type.INT],
+                    )
+                ],
+            )
+        ],
     )
     self.object_counts_before_test = self._grab_object_counts()
 
@@ -170,28 +182,28 @@ class CelParallelTest(absltest.TestCase):
     self._test_eval(multi_threaded=False)
 
   def _test_compile(self, multi_threaded: bool):
-    def compile_expr(n: int) -> cel.Expression:
+
+    def compile_and_eval(n: int) -> Any:
       test_case = _TEST_CASES[n % len(_TEST_CASES)]
-      return self.env.compile(test_case.expr)
+      expr = self.env.compile(test_case.expr)
+      data = test_case.data(n)
+      return expr.eval(data=data).plain_value()
 
     start_time = time.perf_counter()
     if multi_threaded:
       with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        results = list(executor.map(compile_expr, range(_NUM_COMPILATIONS)))
+        results = list(executor.map(compile_and_eval, range(_NUM_COMPILATIONS)))
     else:
-      results = [compile_expr(n) for n in range(_NUM_COMPILATIONS)]
+      results = [compile_and_eval(n) for n in range(_NUM_COMPILATIONS)]
     duration_ms = (time.perf_counter() - start_time) * 1000
 
     mode = "Multi-threaded" if multi_threaded else "Sequential"
     logging.info("%s compilation duration: %.2f ms", mode, duration_ms)
 
     self.assertLen(results, _NUM_COMPILATIONS)
-    for i, expr in enumerate(results):
+    for i, res in enumerate(results):
       test_case = _TEST_CASES[i % len(_TEST_CASES)]
-      data = test_case.data(i)
-      self.assertEqual(
-          expr.eval(data=data).plain_value(), test_case.expected(i)
-      )
+      self.assertEqual(res, test_case.expected(i))
 
   def testMultiThreadedCompilation(self):
     self._test_compile(multi_threaded=True)
@@ -239,6 +251,25 @@ class CelParallelTest(absltest.TestCase):
 
     for i in range(10):
       run_concurrent_value_test(i)
+
+  def testConcurrentCustomFunction(self):
+    expr = self.env.compile("custom_fn(var_int)")
+
+    def eval_custom_fn(n: int):
+      fn = cel.Function(
+          "custom_fn",
+          [cel.Type.INT],
+          False,
+          lambda x: x * 2,
+          return_type=cel.Type.INT,
+      )
+      act = self.env.Activation({"var_int": n}, functions=[fn])
+      res = expr.eval(act)
+      self.assertEqual(res.value(), n * 2)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+      results = list(executor.map(eval_custom_fn, range(100)))
+    self.assertLen(results, 100)
 
 
 if __name__ == "__main__":

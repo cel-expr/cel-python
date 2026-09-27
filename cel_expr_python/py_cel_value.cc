@@ -166,7 +166,7 @@ PyCelValueProvider::~PyCelValueProvider() {
 cel::Value PyCelValueProvider::Provide(
     const google::protobuf::DescriptorPool* descriptor_pool,
     google::protobuf::MessageFactory* message_factory, google::protobuf::Arena* arena) const {
-  ABSL_CHECK(PyGILState_Check());
+  py::gil_scoped_acquire acquire;
   const PyCelType& type = env_->GetVariableType(name_);
   absl::StatusOr<cel::Value> converted_value = PyObjectToCelValue(
       py_object_, type, [this]() { return name_; }, env_, arena);
@@ -510,6 +510,74 @@ static void EnsureDateTimeModuleImported() {
   absl::call_once(import_py_datetime_once_flag, []() { PyDateTime_IMPORT; });
 }
 
+// Converts a serialized protocol buffer message to a CEL value.
+//
+// The CEL value of the protocol buffer message or cel::ErrorValue if the
+// conversion fails.
+static cel::Value ProtoMessageToCelValue(
+    absl::string_view message_type_name, PyObject* serialized_bytes,
+    const std::shared_ptr<PyCelEnvInternal>& env, google::protobuf::Arena* arena) {
+  // The Python GIL is required to safely inspect the serialized_bytes PyObject.
+  // The caller retains ownership of serialized_bytes, so the extracted buffer
+  // (bytes_ptr and bytes_size) remains valid across GIL release within the
+  // lifetime of this function.
+  const uint8_t* bytes_ptr =
+      reinterpret_cast<const uint8_t*>(PyBytes_AS_STRING(serialized_bytes));
+  const Py_ssize_t bytes_size = PyBytes_GET_SIZE(serialized_bytes);
+
+  absl::StatusOr<cel::Value> wrapped_message;
+  {
+    // Release the GIL before calling into C++ DescriptorPool and MessageFactory
+    // to maintain the lock hierarchy (DescriptorPool Mutex -> Python GIL).
+    // Any fallback lookups into Python (e.g., via PyDescriptorDatabase)
+    // will re-acquire the GIL on demand.
+    py::gil_scoped_release gil_release;
+
+    const google::protobuf::Descriptor* descriptor =
+        env->GetDescriptorPool()->FindMessageTypeByName(message_type_name);
+    if (descriptor == nullptr) {
+      wrapped_message = absl::InvalidArgumentError(absl::StrFormat(
+          "Descriptor not found for message type '%s'", message_type_name));
+    } else {
+      const google::protobuf::Message* prototype =
+          env->GetMessageFactory()->GetPrototype(descriptor);
+      if (prototype == nullptr) {
+        wrapped_message = absl::InvalidArgumentError(absl::StrFormat(
+            "Prototype not found for message type '%s'", message_type_name));
+      } else {
+        google::protobuf::Message* message = prototype->New(arena);
+        if (message == nullptr) {
+          wrapped_message = absl::InternalError(absl::StrFormat(
+              "Failed to create new message of type '%s'", message_type_name));
+        } else {
+          google::protobuf::io::CodedInputStream coded_input_stream(bytes_ptr,
+                                                          bytes_size);
+          if (!message->MergePartialFromCodedStream(&coded_input_stream)) {
+            wrapped_message = absl::InvalidArgumentError(absl::StrFormat(
+                "Failed to parse serialized data for type '%s' ",
+                message_type_name));
+          } else {
+            wrapped_message =
+                cel::Value::WrapMessage(message, env->GetDescriptorPool(),
+                                        env->GetMessageFactory(), arena);
+          }
+        }
+      }
+    }
+  }
+
+  // The GIL is re-acquired here. Check if protobuf parsing or descriptor
+  // lookups raised a Python exception in PyDescriptorDatabase.
+  absl::Status status = PyErr_toStatus();
+  if (!status.ok()) {
+    return cel::ErrorValue(status);
+  }
+  if (!wrapped_message.ok()) {
+    return cel::ErrorValue(wrapped_message.status());
+  }
+  return *wrapped_message;
+}
+
 absl::StatusOr<cel::Value> PyObjectToCelValue(
     PyObject* py_object, const PyCelType& expected_type,
     absl::FunctionRef<std::string()> context,
@@ -741,46 +809,10 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         return InvalidTypeError(py_object, context, expected_type);
       }
 
-      const std::string& message_type_name = type.ToString();
-      const google::protobuf::Descriptor* descriptor =
-          env->GetDescriptorPool()->FindMessageTypeByName(message_type_name);
-      if (descriptor == nullptr) {
-        return cel::ErrorValue(absl::InvalidArgumentError(absl::StrFormat(
-            "Descriptor not found for message type '%s'", message_type_name)));
-      }
-
-      const google::protobuf::Message* prototype =
-          env->GetMessageFactory()->GetPrototype(descriptor);
-      if (prototype == nullptr) {
-        return cel::ErrorValue(absl::InvalidArgumentError(absl::StrFormat(
-            "Prototype not found for message type '%s'", message_type_name)));
-      }
-      google::protobuf::Message* message = prototype->New(arena);
-      if (message == nullptr) {
-        return cel::ErrorValue(absl::InternalError(absl::StrFormat(
-            "Failed to create new message of type '%s'", message_type_name)));
-      }
-
-      // Create a CodedInputStream to read the serialized bytes directly from
-      // the Python bytes object, without copying.
-      google::protobuf::io::CodedInputStream coded_input_stream(
-          reinterpret_cast<uint8_t*>(PyBytes_AS_STRING(serialized_bytes)),
-          PyBytes_GET_SIZE(serialized_bytes));
-      if (!message->MergePartialFromCodedStream(&coded_input_stream)) {
-        Py_DECREF(serialized_bytes);
-        return cel::ErrorValue(absl::InvalidArgumentError(
-            absl::StrFormat("Failed to parse serialized data for type '%s' ",
-                            message_type_name)));
-      }
+      cel::Value value =
+          ProtoMessageToCelValue(type.ToString(), serialized_bytes, env, arena);
       Py_DECREF(serialized_bytes);
-      // Protobuf parsing may have run into a Python exception in
-      // PyDescriptorDatabase, which makes Python native calls.
-      absl::Status status = PyErr_toStatus();
-      if (!status.ok()) {
-        return cel::ErrorValue(status);
-      }
-      return cel::Value::WrapMessage(message, env->GetDescriptorPool(),
-                                     env->GetMessageFactory(), arena);
+      return value;
     }
     case cel::Kind::kList: {
       if (PyList_Check(py_object)) {

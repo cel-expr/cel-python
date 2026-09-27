@@ -83,6 +83,7 @@ bool PyDescriptorDatabase::FindFileByName(StringViewArg filename,
   if (pyfile_serialized == nullptr) {
     PyErr_Format(PyExc_TypeError,
                  "Python file has no attribute 'serialized_pb'");
+    PyErr_noteAndClear();
     return false;
   }
 
@@ -133,6 +134,7 @@ bool PyDescriptorDatabase::FindFileContainingSymbol(
   if (pyfile_serialized == nullptr) {
     PyErr_Format(PyExc_TypeError,
                  "Python file has no attribute 'serialized_pb'");
+    PyErr_noteAndClear();
     return false;
   }
 
@@ -142,6 +144,7 @@ bool PyDescriptorDatabase::FindFileContainingSymbol(
   if (!ok) {
     PyErr_Format(PyExc_RuntimeError, "Failed to parse descriptor for %s",
                  symbol_name.data());
+    PyErr_noteAndClear();
   }
   Py_DECREF(pyfile_serialized);
   return ok;

@@ -76,7 +76,7 @@ class PyCelEnvInternal {
       PyObject* py_descriptor_pool,
       const std::unordered_map<std::string, PyCelType>& variable_types,
       const std::vector<PyObject*>& extensions,
-      cel::ExpressionContainer container,
+      const cel::ExpressionContainer& container,
       const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
       const std::unordered_map<std::string, py::object>& function_impls);
 

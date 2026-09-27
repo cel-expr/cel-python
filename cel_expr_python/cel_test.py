@@ -846,6 +846,45 @@ class _CelTestBase(absltest.TestCase):
         r"Could not find file containing symbol:.* \[NOT_FOUND\]",
     )
 
+  def testDescriptorPoolMissingSerializedPb(self):
+    bad_env = cel.NewEnv(
+        _MissingSerializedPbPool(),
+        variables={},
+        options=self.options,
+    )
+    with self.assertRaises(Exception) as e:
+      bad_env.compile("cel.expr.conformance.proto2.TestSomeTypes{}")
+    self.assertIn(
+        "Python file has no attribute 'serialized_pb'",
+        str(e.exception),
+    )
+
+  def testDescriptorPoolCorruptedSerializedPb(self):
+    bad_env = cel.NewEnv(
+        _CorruptedSerializedPbPool(),
+        variables={},
+        options=self.options,
+    )
+    with self.assertRaises(Exception) as e:
+      bad_env.compile("cel.expr.conformance.proto2.TestSomeTypes{}")
+    self.assertIn(
+        "Failed to parse descriptor for"
+        " cel.expr.conformance.proto2.TestSomeTypes",
+        str(e.exception),
+    )
+
+  def testProtoMessageToCelValueError(self):
+    bad_env = cel.NewEnv(
+        _RaisingDescriptorPool(),
+        variables={"var_proto": cel.Type.DYN},
+        options=self.options,
+    )
+    expr = bad_env.compile("var_proto", disable_check=True)
+    msg = test_all_types_pb.TestAllTypes(single_string="Hey")
+    res = expr.eval(data={"var_proto": msg})
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn("Custom pool error", str(res.value()))
+
 
 class CompatibleNumber:
 
@@ -872,7 +911,47 @@ class IncompatibleNumber:
 class _BadDescriptorPool:
 
   def FindFileContainingSymbol(self, symbol_name: str):  # pylint: disable=invalid-name
-    raise LookupError("Could not find file containing symbol: %s" % symbol_name)
+    if symbol_name.startswith("cel.expr.conformance"):
+      raise LookupError(
+          "Could not find file containing symbol: %s" % symbol_name
+      )
+    raise KeyError(symbol_name)
+
+
+class _MissingSerializedPbPool:
+
+  def FindFileByName(  # pylint: disable=invalid-name,unused-argument
+      self, filename: str
+  ):
+    raise KeyError(filename)
+
+  def FindFileContainingSymbol(  # pylint: disable=invalid-name,unused-argument
+      self, symbol_name: str
+  ):
+    if symbol_name.startswith("cel.expr.conformance"):
+      return object()
+    raise KeyError(symbol_name)
+
+
+class _CorruptedSerializedPbPool:
+
+  class _FakeFile:
+    serialized_pb = b"corrupted proto descriptor bytes"
+
+  def FindFileContainingSymbol(  # pylint: disable=invalid-name,unused-argument
+      self, symbol_name: str
+  ):
+    if symbol_name.startswith("cel.expr.conformance"):
+      return self._FakeFile()
+    raise KeyError(symbol_name)
+
+
+class _RaisingDescriptorPool:
+
+  def FindFileContainingSymbol(self, symbol_name: str):  # pylint: disable=invalid-name
+    if symbol_name.startswith("cel.expr.conformance"):
+      raise RuntimeError("Custom pool error: %s" % symbol_name)
+    raise KeyError(symbol_name)
 
 
 class CelWithoutProtoSupportTest(absltest.TestCase):

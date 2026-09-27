@@ -115,11 +115,16 @@ PyCelEnvInternal::PyCelEnvInternal(
   google::protobuf::Arena arena;
   for (const cel::Config::VariableConfig& variable_config :
        env_config_.GetConfig().GetVariableConfigs()) {
-    auto status_or_type = cel::TypeInfoToType(variable_config.type_info,
-                                              descriptor_pool_.get(), &arena);
-    if (status_or_type.ok()) {
-      variable_types_[variable_config.name] =
-          PyCelType::FromCelType(*status_or_type);
+    absl::StatusOr<cel::Type> type;
+    {
+      // Release the GIL during TypeInfoToType lookups to prevent lock order
+      // inversion with DescriptorPool's internal mutex.
+      py::gil_scoped_release gil_release;
+      type = cel::TypeInfoToType(variable_config.type_info,
+                                 descriptor_pool_.get(), &arena);
+    }
+    if (type.ok()) {
+      variable_types_[variable_config.name] = PyCelType::FromCelType(*type);
     }
   }
 }
@@ -132,7 +137,7 @@ PyCelEnvInternal::NewCelEnvInternal(
     PyObject* py_descriptor_pool,
     const std::unordered_map<std::string, PyCelType>& variable_types,
     const std::vector<PyObject*>& extensions,
-    cel::ExpressionContainer container,
+    const cel::ExpressionContainer& container,
     const std::vector<std::shared_ptr<PyCelFunctionDecl>>& functions,
     const std::unordered_map<std::string, py::object>& function_impls) {
   cel::Config config = env_config.GetConfig();
@@ -310,17 +315,6 @@ absl::StatusOr<std::unique_ptr<cel::Runtime>> PyCelEnvInternal::BuildRuntime(
        GetEnvConfig().GetConfig().GetFunctionConfigs()) {
     for (const cel::Config::FunctionOverloadConfig& overload_config :
          function_config.overload_configs) {
-      auto it = function_impls_.find(overload_config.overload_id);
-      if (it == function_impls_.end()) {
-        continue;
-      }
-      py::object py_function;
-      if (!PyGILState_Check()) {
-        py::gil_scoped_acquire acquire;
-        py_function = it->second;
-      } else {
-        py_function = it->second;
-      }
       std::vector<cel::Kind> param_kinds;
       param_kinds.reserve(overload_config.parameters.size());
       for (const cel::Config::TypeInfo& parameter :
@@ -333,15 +327,20 @@ absl::StatusOr<std::unique_ptr<cel::Runtime>> PyCelEnvInternal::BuildRuntime(
       cel::FunctionDescriptor descriptor(
           function_config.name, overload_config.is_member_function, param_kinds,
           kFunctionDescriptorOptions);
+      auto it = function_impls_.find(overload_config.overload_id);
+      if (it == function_impls_.end()) {
+        CEL_PYTHON_RETURN_IF_ERROR(
+            builder.function_registry().RegisterLazyFunction(descriptor));
+        continue;
+      }
       CEL_PYTHON_ASSIGN_OR_RETURN(
           cel::Type return_type,
           cel::TypeInfoToType(overload_config.return_type,
                               descriptor_pool_.get(), &arena));
       CEL_PYTHON_RETURN_IF_ERROR(builder.function_registry().Register(
-          descriptor,
-          std::make_unique<PyCelFunctionAdapter>(
-              function_config.name, PyCelType::FromCelType(return_type),
-              std::move(py_function))));
+          descriptor, std::make_unique<PyCelFunctionAdapter>(
+                          function_config.name,
+                          PyCelType::FromCelType(return_type), it->second)));
     }
   }
   return std::move(builder).Build();

@@ -75,15 +75,33 @@ PyCelFunction::PyCelFunction(std::string function_name,
 
 PyCelFunctionAdapter::PyCelFunctionAdapter(std::string function_name,
                                            PyCelType return_type,
-                                           py::object py_function)
+                                           const py::object& py_function)
     : function_name_(std::move(function_name)),
       return_type_(std::move(return_type)),
-      py_function_(std::move(py_function)) {}
+      py_function_(py_function.ptr()) {
+  if (!PyGILState_Check()) {
+    py::gil_scoped_acquire acquire;
+    Py_XINCREF(py_function_);
+  } else {
+    Py_XINCREF(py_function_);
+  }
+}
+
+PyCelFunctionAdapter::~PyCelFunctionAdapter() {
+  if (py_function_ != nullptr) {
+    if (!PyGILState_Check()) {
+      py::gil_scoped_acquire acquire;
+      Py_XDECREF(py_function_);
+    } else {
+      Py_XDECREF(py_function_);
+    }
+  }
+}
 
 absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
     absl::Span<const cel::Value> args,
     const cel::Function::InvokeContext& context) const {
-  ABSL_CHECK(PyGILState_Check());
+  py::gil_scoped_acquire acquire;
 
   std::shared_ptr<PyCelEnvInternal> env = GetEnvFromContext(context);
   CEL_PYTHON_ASSIGN_OR_RETURN(auto py_arena,
@@ -94,7 +112,7 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
                     CelValueToPyObject(args[i], env, py_arena,
                                        /*plain_value=*/true));
   }
-  PyObject* result = PyObject_CallObject(py_function_.ptr(), py_args);
+  PyObject* result = PyObject_CallObject(py_function_, py_args);
   Py_DECREF(py_args);
   absl::Status status = PyErr_toStatus();
   if (!status.ok()) {
@@ -105,9 +123,8 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
   absl::StatusOr<cel::Value> cel_result = PyObjectToCelValue(
       result, return_type_,
       [this]() {
-        return absl::StrFormat(
-            "Python function '%s'",
-            PyUnicode_AsUTF8(PyObject_Repr(py_function_.ptr())));
+        return absl::StrFormat("Python function '%s'",
+                               PyUnicode_AsUTF8(PyObject_Repr(py_function_)));
       },
       env, context.arena());
   Py_XDECREF(result);

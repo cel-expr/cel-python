@@ -45,7 +45,7 @@ class PyCelFunction {
   std::string function_name() const { return function_name_; }
   const std::vector<PyCelType>& parameters() const { return parameters_; }
   bool is_member() const { return is_member_; }
-  py::object impl() const { return impl_; }
+  const py::object& impl() const { return impl_; }
   const PyCelType& return_type() const { return return_type_; }
 
  private:
@@ -61,7 +61,11 @@ class PyCelFunction {
 class PyCelFunctionAdapter : public cel::Function {
  public:
   PyCelFunctionAdapter(std::string function_name, PyCelType return_type,
-                       py::object py_function);
+                       const py::object& py_function);
+  ~PyCelFunctionAdapter() override;
+
+  PyCelFunctionAdapter(const PyCelFunctionAdapter&) = delete;
+  PyCelFunctionAdapter& operator=(const PyCelFunctionAdapter&) = delete;
 
   absl::StatusOr<cel::Value> Invoke(
       absl::Span<const cel::Value> args,
@@ -70,7 +74,7 @@ class PyCelFunctionAdapter : public cel::Function {
  private:
   std::string function_name_;
   PyCelType return_type_;
-  py::object py_function_;
+  PyObject* py_function_;
 };
 
 }  // namespace cel_python

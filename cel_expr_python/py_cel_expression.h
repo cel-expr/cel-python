@@ -24,8 +24,8 @@
 #include "cel/expr/syntax.pb.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "runtime/runtime.h"
-#include "cel_expr_python/free_threading_mutex.h"
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_cel_value.h"
@@ -70,7 +70,13 @@ class PyCelExpression {
   std::variant<cel::expr::ParsedExpr, cel::expr::CheckedExpr>
       expr_;
   std::shared_ptr<PyCelEnvInternal> env_;
-  mutable FreeThreadingMutex mutex_;
+  // mutex_ protects lazy initialization of cel_program_ in GetProgram().
+  // Unlike FreeThreadingMutex (which compiles to a no-op in GIL builds), a real
+  // absl::Mutex is required here because Eval() releases the Python GIL before
+  // calling GetProgram(), allowing multiple threads in both GIL-enabled and
+  // free-threaded Python builds to concurrently access and initialize
+  // cel_program_.
+  mutable absl::Mutex mutex_;
   std::unique_ptr<cel::Program> cel_program_ ABSL_GUARDED_BY(mutex_);
 };
 

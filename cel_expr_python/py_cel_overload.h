@@ -43,7 +43,7 @@ class PyCelOverload {
   PyCelType return_type() const { return return_type_; }
   const std::vector<PyCelType>& parameters() const { return parameters_; }
   bool is_member() const { return is_member_; }
-  py::object py_function() const { return py_function_; }
+  const py::object& py_function() const { return py_function_; }
 
   cel::Config::FunctionOverloadConfig ToFunctionOverloadConfig() const;
 

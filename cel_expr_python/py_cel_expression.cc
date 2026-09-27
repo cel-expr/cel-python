@@ -33,6 +33,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/synchronization/mutex.h"
 #include "checker/validation_result.h"
 #include "common/ast.h"
 #include "common/ast_proto.h"
@@ -43,7 +44,6 @@
 #include "parser/parser_interface.h"
 #include "runtime/embedder_context.h"
 #include "runtime/runtime.h"
-#include "cel_expr_python/free_threading_mutex.h"
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_arena.h"
 #include "cel_expr_python/py_cel_env_internal.h"
@@ -129,7 +129,8 @@ absl::StatusOr<PyCelExpression> PyCelExpression::Compile(
 }
 
 PyCelExpression::PyCelExpression(PyCelExpression&& other) noexcept {
-  FreeThreadingLockGuard lock(other.mutex_);
+  // Lock other.mutex_ to safely move the Program and expression state.
+  absl::MutexLock lock(other.mutex_);
   expr_ = std::move(other.expr_);
   env_ = std::move(other.env_);
   cel_program_ = std::move(other.cel_program_);
@@ -155,7 +156,10 @@ PyCelType PyCelExpression::GetReturnType() {
 }
 
 absl::StatusOr<const cel::Program*> PyCelExpression::GetProgram() {
-  FreeThreadingLockGuard lock(mutex_);
+  // Lock is needed in both GIL-enabled and free-threaded builds because Eval()
+  // releases the Python GIL before calling GetProgram(), allowing multiple
+  // threads to concurrently initialize cel_program_.
+  absl::MutexLock lock(mutex_);
   if (cel_program_) {
     return cel_program_.get();
   }
@@ -179,17 +183,26 @@ absl::StatusOr<const cel::Program*> PyCelExpression::GetProgram() {
 absl::StatusOr<PyCelValue> PyCelExpression::Eval(
     const PyCelActivation& activation) {
   ABSL_CHECK(PyGILState_Check());
-  CEL_PYTHON_ASSIGN_OR_RETURN(const cel::Program* program, GetProgram());
   std::shared_ptr<PyCelArena> arena = activation.GetArena();
   std::shared_ptr<PyCelEnvInternal> env = activation.GetEnv();
-  cel::EmbedderContext embedder_context = cel::EmbedderContext::From(&env);
-  cel::EvaluateOptions options;
-  options.message_factory = env->GetMessageFactory();
-  options.embedder_context = &embedder_context;
-  CEL_PYTHON_ASSIGN_OR_RETURN(
-      cel::Value result,
-      program->Evaluate(arena->GetArena(), *activation.GetActivation(),
-                        std::move(options)));
+  cel::Value result;
+  {
+    // Release the GIL before entering C++ program creation and evaluation to
+    // prevent lock inversion/deadlock with DescriptorPool's internal mutex
+    // (C++ Locks -> DescriptorPool Mutex -> Python GIL). Callbacks into Python
+    // (such as PyCelValueProvider::Provide and PyCelFunctionAdapter::Invoke)
+    // re-acquire the GIL on demand.
+    py::gil_scoped_release gil_release;
+    CEL_PYTHON_ASSIGN_OR_RETURN(const cel::Program* program, GetProgram());
+    cel::EmbedderContext embedder_context = cel::EmbedderContext::From(&env);
+    cel::EvaluateOptions options;
+    options.message_factory = env->GetMessageFactory();
+    options.embedder_context = &embedder_context;
+    CEL_PYTHON_ASSIGN_OR_RETURN(
+        result,
+        program->Evaluate(arena->GetArena(), *activation.GetActivation(),
+                          std::move(options)));
+  }
   return PyCelValue(result, arena, std::move(env));
 }
 
