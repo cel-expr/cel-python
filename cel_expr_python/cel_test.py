@@ -885,6 +885,22 @@ class _CelTestBase(absltest.TestCase):
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn("Custom pool error", str(res.value()))
 
+  def testValueOutlivesExpression(self):
+    expr: cel.Expression = self.env.compile("'hello ' + 'world'")
+    val: cel.Value = expr.eval()
+    del expr
+    self.assertEqual(val.value(), "hello world")
+
+    expr = self.env.compile("b'hello'")
+    val = expr.eval()
+    del expr
+    self.assertEqual(val.value(), b"hello")
+
+    expr = self.env.compile("['a', 'b', 'c']")
+    val = expr.eval()
+    del expr
+    self.assertEqual(val.plain_value(), ["a", "b", "c"])
+
 
 class CompatibleNumber:
 

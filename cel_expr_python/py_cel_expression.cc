@@ -202,6 +202,7 @@ absl::StatusOr<PyCelValue> PyCelExpression::Eval(
         result,
         program->Evaluate(arena->GetArena(), *activation.GetActivation(),
                           std::move(options)));
+    result = result.Clone(arena->GetArena());
   }
   return PyCelValue(result, arena, std::move(env));
 }
