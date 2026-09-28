@@ -117,7 +117,7 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
   absl::Status status = PyErr_toStatus();
   if (!status.ok()) {
     Py_XDECREF(result);
-    return cel::ErrorValue(status);
+    return cel::ErrorValue::From(status, context.arena());
   }
 
   absl::StatusOr<cel::Value> cel_result = PyObjectToCelValue(

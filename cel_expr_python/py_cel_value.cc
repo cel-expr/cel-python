@@ -171,7 +171,7 @@ cel::Value PyCelValueProvider::Provide(
   absl::StatusOr<cel::Value> converted_value = PyObjectToCelValue(
       py_object_, type, [this]() { return name_; }, env_, arena);
   if (!converted_value.ok()) {
-    return cel::ErrorValue(converted_value.status());
+    return cel::ErrorValue::From(converted_value.status(), arena);
   }
   return *converted_value;
 }
@@ -193,7 +193,8 @@ void PyCelListItemAccessor::ResolveElementLocked() {
       list.Get(index_, env_->GetDescriptorPool(), env_->GetMessageFactory(),
                arena_->GetArena());
   if (!element.ok()) {
-    element_value_ = cel::ErrorValue(element.status());
+    element_value_ =
+        cel::ErrorValue::From(element.status(), arena_->GetArena());
     resolved_ = true;
     return;
   }
@@ -265,7 +266,7 @@ void PyCelMapItemAccessor::ResolveElementLocked() {
       map.Get(key_, env_->GetDescriptorPool(), env_->GetMessageFactory(),
               arena_->GetArena(), &element_value_);
   if (!status.ok()) {
-    element_value_ = cel::ErrorValue(status);
+    element_value_ = cel::ErrorValue::From(status, arena_->GetArena());
     resolved_ = true;
     return;
   }
@@ -393,8 +394,9 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
       }
       if (!status.ok()) {
         Py_DECREF(py_list);
-        return CelValueToPyObject(cel::ErrorValue(status), env, arena,
-                                  /*plain_value=*/plain_value);
+        return CelValueToPyObject(
+            cel::ErrorValue::From(status, arena->GetArena()), env, arena,
+            /*plain_value=*/plain_value);
       }
       return py_list;
     }
@@ -498,11 +500,13 @@ static absl::string_view NormalizeTypeName(absl::string_view type_name) {
 
 static cel::ErrorValue InvalidTypeError(
     PyObject* py_object, absl::FunctionRef<std::string()> context,
-    const PyCelType& expected_type) {
+    const PyCelType& expected_type, google::protobuf::Arena* arena) {
   PyTypeObject* type = Py_TYPE(py_object);
-  return cel::ErrorValue(absl::InvalidArgumentError(
-      absl::StrFormat("Unexpected value type for '%s': %s. (Expected %s)",
-                      context(), type->tp_name, expected_type.GetName())));
+  return cel::ErrorValue::From(
+      absl::InvalidArgumentError(
+          absl::StrFormat("Unexpected value type for '%s': %s. (Expected %s)",
+                          context(), type->tp_name, expected_type.GetName())),
+      arena);
 }
 
 static void EnsureDateTimeModuleImported() {
@@ -570,10 +574,10 @@ static cel::Value ProtoMessageToCelValue(
   // lookups raised a Python exception in PyDescriptorDatabase.
   absl::Status status = PyErr_toStatus();
   if (!status.ok()) {
-    return cel::ErrorValue(status);
+    return cel::ErrorValue::From(status, arena);
   }
   if (!wrapped_message.ok()) {
-    return cel::ErrorValue(wrapped_message.status());
+    return cel::ErrorValue::From(wrapped_message.status(), arena);
   }
   return *wrapped_message;
 }
@@ -584,9 +588,11 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
     const std::shared_ptr<PyCelEnvInternal>& env, google::protobuf::Arena* arena,
     bool bypass_type_check) {
   if (!py_object) {
-    return cel::ErrorValue(absl::InvalidArgumentError(
-        absl::StrFormat("Unexpected None value for '%s'. (Expected %s)",
-                        context(), expected_type.GetName())));
+    return cel::ErrorValue::From(
+        absl::InvalidArgumentError(
+            absl::StrFormat("Unexpected None value for '%s'. (Expected %s)",
+                            context(), expected_type.GetName())),
+        arena);
   }
 
   switch (expected_type.GetKind()) {
@@ -605,40 +611,40 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
       } else if (py_object == Py_False) {
         return cel::BoolValue(false);
       } else {
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
     }
     case cel::Kind::kInt: {
       if (bypass_type_check || PyNumber_Check(py_object)) {
         int64_t value = PyLong_AsLongLong(py_object);
         if (PyErr_Occurred()) {
-          return cel::ErrorValue(PyErr_toStatus());
+          return cel::ErrorValue::From(PyErr_toStatus(), arena);
         }
         return cel::IntValue(value);
       } else {
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
     }
     case cel::Kind::kUint: {
       if (bypass_type_check || PyNumber_Check(py_object)) {
         uint64_t value = PyLong_AsUnsignedLongLong(py_object);
         if (PyErr_Occurred()) {
-          return cel::ErrorValue(PyErr_toStatus());
+          return cel::ErrorValue::From(PyErr_toStatus(), arena);
         }
         return cel::UintValue(value);
       } else {
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
     }
     case cel::Kind::kDouble: {
       if (bypass_type_check || PyNumber_Check(py_object)) {
         double value = PyFloat_AsDouble(py_object);
         if (PyErr_Occurred()) {
-          return cel::ErrorValue(PyErr_toStatus());
+          return cel::ErrorValue::From(PyErr_toStatus(), arena);
         }
         return cel::DoubleValue(value);
       } else {
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
     }
     case cel::Kind::kString: {
@@ -648,7 +654,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
       } else if (PyBytes_Check(py_object)) {
         return cel::StringValue::From(PyBytes_AsString(py_object), arena);
       } else {
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
     }
     case cel::Kind::kBytes: {
@@ -659,7 +665,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
       } else if (PyBytes_Check(py_object)) {
         return cel::BytesValue::From(PyBytes_AsString(py_object), arena);
       }
-      return InvalidTypeError(py_object, context, expected_type);
+      return InvalidTypeError(py_object, context, expected_type, arena);
     }
     case cel::Kind::kTimestamp: {
       EnsureDateTimeModuleImported();
@@ -676,7 +682,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         absl::StatusOr<cel::TimestampValue> timestamp_value =
             cel::SafeTimestampValue(time);
         if (!timestamp_value.ok()) {
-          return cel::ErrorValue(timestamp_value.status());
+          return cel::ErrorValue::From(timestamp_value.status(), arena);
         }
         return *timestamp_value;
       } else if (std::string_view(Py_TYPE(py_object)->tp_name) == "Timestamp") {
@@ -717,11 +723,11 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         absl::StatusOr<cel::TimestampValue> timestamp_value =
             cel::SafeTimestampValue(time);
         if (!timestamp_value.ok()) {
-          return cel::ErrorValue(timestamp_value.status());
+          return cel::ErrorValue::From(timestamp_value.status(), arena);
         }
         return *timestamp_value;
       } else {
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
     }
     case cel::Kind::kDuration: {
@@ -739,7 +745,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         absl::StatusOr<cel::DurationValue> duration_value =
             cel::SafeDurationValue(duration);
         if (!duration_value.ok()) {
-          return cel::ErrorValue(duration_value.status());
+          return cel::ErrorValue::From(duration_value.status(), arena);
         }
         return *duration_value;
       } else if (std::string_view(Py_TYPE(py_object)->tp_name) == "Duration") {
@@ -780,11 +786,11 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         absl::StatusOr<cel::DurationValue> duration_value =
             cel::SafeDurationValue(duration);
         if (!duration_value.ok()) {
-          return cel::ErrorValue(duration_value.status());
+          return cel::ErrorValue::From(duration_value.status(), arena);
         }
         return *duration_value;
       } else {
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
     }
     case cel::Kind::kMessage: {
@@ -793,20 +799,20 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
       if (!bypass_type_check && type.GetName() != expected_type.GetName() &&
           NormalizeTypeName(type.GetName()) !=
               NormalizeTypeName(expected_type.GetName())) {
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
 
       PyObject* serialized_bytes =
           PyObject_CallMethod(py_object, "SerializePartialToString", "");
       if (!serialized_bytes) {
         PyErr_Clear();
-        return cel::ErrorValue(PyErr_toStatus());
+        return cel::ErrorValue::From(PyErr_toStatus(), arena);
       }
 
       if (!PyBytes_Check(serialized_bytes)) {
         Py_DECREF(serialized_bytes);
         // Expected SerializePartialToString to return bytes.
-        return InvalidTypeError(py_object, context, expected_type);
+        return InvalidTypeError(py_object, context, expected_type, arena);
       }
 
       cel::Value value =
@@ -843,7 +849,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
                                     /*bypass_type_check=*/true);
         }
       }
-      return InvalidTypeError(py_object, context, expected_type);
+      return InvalidTypeError(py_object, context, expected_type, arena);
     }
     case cel::Kind::kMap: {
       if (PyDict_Check(py_object)) {
@@ -890,7 +896,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
                                     /*bypass_type_check=*/true);
         }
       }
-      return InvalidTypeError(py_object, context, expected_type);
+      return InvalidTypeError(py_object, context, expected_type, arena);
     }
     default: {
       return absl::UnimplementedError(
