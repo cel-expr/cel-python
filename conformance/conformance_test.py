@@ -53,6 +53,10 @@ class ConformanceTestSuite(unittest.TestSuite):
       "type_deduction/type_parameters/multiple_parameters_parameterized_ovl",
       "type_deduction/type_parameters/multiple_parameters_parameterized_ovl_2",
       "type_deduction/flexible_type_parameter_assignment/unconstrained_type_var_as_dyn",
+      "type_deduction/type_parameters_in_type_type/type_param_in_type_type_int",
+      "type_deduction/type_parameters_in_type_type/type_param_in_type_type_string",
+      "type_deduction/type_parameters_in_type_type/composite_type_param_in_type_type",
+      "type_deduction/type_parameters_in_type_type/nested_type_param_in_type_type",
       # TODO(b/178627883): Strong typing support for enums not implemented.
       "enums/strong_proto2/.*",
       "enums/strong_proto3/.*",
@@ -74,6 +78,13 @@ class ConformanceTestSuite(unittest.TestSuite):
       "proto3/set_null/map_timestamp_null_pruned",
       "proto3/set_null/map_duration_null_pruned",
       "proto3/set_null/map_wrapper_null_pruned",
+      # TODO(b/577138668): C++ type checker bug, though lower priority.
+      "type_deduction/type_decay/type_list_decay",
+      "type_deduction/type_decay/type_ternary_decay",
+      "type_deduction/type_decay/type_free_param_list_decay",
+      "type_deduction/type_decay/type_free_param_list_decay_order_independent",
+      "type_deduction/type_decay/type_nested_list_decay",
+      "type_deduction/type_decay/type_free_param_list_concat",
   ]
 
   if sys.platform == "win32":
