@@ -85,6 +85,23 @@ class ConformanceTestSuite(unittest.TestSuite):
       "type_deduction/type_decay/type_free_param_list_decay_order_independent",
       "type_deduction/type_decay/type_nested_list_decay",
       "type_deduction/type_decay/type_free_param_list_concat",
+      # Aligned timestamp and duration bounds with protobuf well-known types
+      "timestamps/timestamp_arithmetic/subtract_max_duration_from_max_time",
+      "timestamps/timestamp_arithmetic/add_duration_to_duration_max",
+      "timestamps/timestamp_arithmetic/subtract_duration_from_duration_min",
+      "timestamps/timestamp_range/sub_time_duration_over",
+      "timestamps/timestamp_range/sub_time_duration_under",
+      "wrappers/duration/seconds_over",
+      "wrappers/duration/seconds_under",
+      "wrappers/duration/nanos_over",
+      "wrappers/duration/nanos_under",
+      "wrappers/duration/positive_seconds_negative_nanos",
+      "wrappers/duration/negative_seconds_positive_nanos",
+      "wrappers/timestamp/seconds_over",
+      "wrappers/timestamp/seconds_under",
+      "wrappers/timestamp/nanos_over",
+      "wrappers/timestamp/nanos_under",
+      "wrappers/timestamp/negative_seconds_negative_nanos",
   ]
 
   if sys.platform == "win32":
