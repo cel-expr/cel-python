@@ -91,6 +91,10 @@ class ConformanceTestSuite(unittest.TestSuite):
       "timestamps/timestamp_arithmetic/subtract_max_duration_from_max_time",
       "timestamps/timestamp_range/sub_time_duration_over",
       "timestamps/timestamp_range/sub_time_duration_under",
+      # TODO(b/581943737): These depend on legacy US/ timezones, which are
+      # incompletely supported in our test environment.
+      "timestamps/timestamp_selectors_tz/getDayOfMonth_name_pos",
+      "timestamps/timestamp_selectors_tz/getDayOfYear",
       "wrappers/duration/nanos_over",
       "wrappers/duration/nanos_under",
       "wrappers/duration/negative_seconds_positive_nanos",

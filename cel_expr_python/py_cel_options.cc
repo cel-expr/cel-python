@@ -56,7 +56,7 @@ void PyCelOptions::DefinePythonBindings(pybind11::module& m) {
       .def(py::init([](bool enable_pratt_parser) {
              return PyCelOptions{.enable_pratt_parser = enable_pratt_parser};
            }),
-           py::arg("enable_pratt_parser") = false)
+           py::arg("enable_pratt_parser") = true)
       .def_readwrite("enable_pratt_parser", &PyCelOptions::enable_pratt_parser)
       .def("__repr__", &GenericRepr);
 }

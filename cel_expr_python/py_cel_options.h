@@ -24,7 +24,7 @@ namespace cel_python {
 struct PyCelOptions {
   static void DefinePythonBindings(pybind11::module& m);
 
-  bool enable_pratt_parser = false;
+  bool enable_pratt_parser = true;
 };
 
 }  // namespace cel_python

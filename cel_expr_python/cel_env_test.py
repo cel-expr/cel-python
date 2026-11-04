@@ -725,18 +725,18 @@ class CelEnvTest(absltest.TestCase):
     self.assertFalse(res.value())
 
   def test_env_options(self):
-    options = cel.Options(enable_pratt_parser=True)
+    options = cel.Options()
     self.assertTrue(options.enable_pratt_parser)
     self.assertEqual(repr(options), "Options(enable_pratt_parser=True)")
     options.enable_pratt_parser = False
     self.assertFalse(options.enable_pratt_parser)
     self.assertEqual(repr(options), "Options(enable_pratt_parser=False)")
 
-    env = cel.NewEnv(options=cel.Options(enable_pratt_parser=True))
-    self.assertTrue(env.options().enable_pratt_parser)
+    env = cel.NewEnv(options=cel.Options(enable_pratt_parser=False))
+    self.assertFalse(env.options().enable_pratt_parser)
 
     default_env = cel.NewEnv()
-    self.assertFalse(default_env.options().enable_pratt_parser)
+    self.assertTrue(default_env.options().enable_pratt_parser)
 
 
 class TestCelExtension(cel.CelExtension):

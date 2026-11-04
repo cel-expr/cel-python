@@ -1074,8 +1074,8 @@ class CelTest(_CelTestBase):
   pass
 
 
-class CelPrattParserTest(_CelTestBase):
-  options = cel.Options(enable_pratt_parser=True)
+class CelAntlrParserTest(_CelTestBase):
+  options = cel.Options(enable_pratt_parser=False)
 
 
 if __name__ == "__main__":
