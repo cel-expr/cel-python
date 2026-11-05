@@ -24,3 +24,9 @@ py_proto_library(
     visibility = ["//visibility:public"],
     deps = ["@cel_conformance//proto/cel/expr/conformance/test:simple_proto"],
 )
+
+py_proto_library(
+    name = "suite_py_pb2",
+    visibility = ["//visibility:public"],
+    deps = ["@cel_conformance//proto/cel/expr/conformance/test:suite_proto"],
+)

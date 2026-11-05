@@ -23,15 +23,21 @@ from typing import Any
 
 from google.protobuf import message_factory
 
+from cel.expr import checked_pb2 as checked_pb
+from google.protobuf import any_pb2 as any_pb
 from google.protobuf import duration_pb2 as duration_pb
 from google.protobuf import timestamp_pb2 as timestamp_pb
 from absl.testing import absltest
+from absl.testing import parameterized
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 from cel_expr_python import cel
+from cel_expr_python import leak_check
+from cel_expr_python.ext import ext_optional
 
 
+@leak_check.leak_checked
 @absltest.skipThisClass("Base class")
-class _CelTestBase(absltest.TestCase):
+class _CelTestBase(parameterized.TestCase):
   options: cel.Options = cel.Options()
 
   def setUp(self):
@@ -53,11 +59,12 @@ class _CelTestBase(absltest.TestCase):
             "var_int_map": cel.Type.Map(cel.Type.INT, cel.Type.STRING),
             "var_string_map": cel.Type.Map(cel.Type.STRING, cel.Type.BOOL),
             "var_dyn_map": cel.Type.MAP,
+            "var_opt_int": cel.Type.Optional(cel.Type.INT),
             "var_dyn": cel.Type.DYN,
         },
+        extensions=[ext_optional.ExtOptional()],
         options=self.options,
     )
-    self.object_counts_before_test = self._grab_object_counts()
 
   def tearDown(self):
     """Tears down the test environment."""
@@ -66,26 +73,6 @@ class _CelTestBase(absltest.TestCase):
     gc.collect()
     # Assert that all Arenas have been garbage-collected
     self.assertEqual(cel._InternalArena._get_instance_count(), 0)
-    self._check_for_leaks()
-
-  def _grab_object_counts(self) -> dict[str, int]:
-    gc.collect()
-    all_objects = gc.get_objects()
-    type_counts = {}
-    for obj in all_objects:
-      obj_type = type(obj)
-      type_counts[obj_type.__name__] = type_counts.get(obj_type, 0) + 1
-    return type_counts
-
-  def _check_for_leaks(self):
-    type_counts = self._grab_object_counts()
-    for key, count in type_counts.items():
-      if count != self.object_counts_before_test.get(key, 0):
-        self.fail(
-            f"Object count for {key} did not match expected count. "
-            f"Expected: {self.object_counts_before_test.get(key, 0)}, "
-            f"Actual: {count}",
-        )
 
   def _eval(
       self,
@@ -364,7 +351,52 @@ class _CelTestBase(absltest.TestCase):
         r" .*. \(Expected cel.expr.conformance.proto2.TestAllTypes\)",
     )
 
-  def testProto_cannotFindMessageClass(self):
+  @parameterized.named_parameters(
+      ("message", "TestAllTypes{single_string: 'hello'}", True),
+      ("list", "[TestAllTypes{single_string: 'hello'}]", True),
+      ("nested_list", "[[1, 2], TestAllTypes{single_string: 'hello'}]", True),
+      ("map_value", "{'k': TestAllTypes{single_string: 'hello'}}", True),
+      (
+          "nested_map_value",
+          (
+              "{'a': [1, 2], 'b': [3, 4], 'z':"
+              " TestAllTypes{single_string: 'hello'}}"
+          ),
+          True,
+      ),
+      ("optional", "optional.of(TestAllTypes{single_string: 'hello'})", True),
+      ("call_message", "show(TestAllTypes{single_string: 'hello'})", False),
+      ("call_list", "show([TestAllTypes{single_string: 'hello'}])", False),
+      (
+          "call_nested_list",
+          "show([[1, 2], TestAllTypes{single_string: 'hello'}])",
+          False,
+      ),
+      (
+          "call_map_value",
+          "show({'k': TestAllTypes{single_string: 'hello'}})",
+          False,
+      ),
+      (
+          "call_nested_map_value",
+          (
+              "show({'a': [1, 2], 'b': [3, 4], 'z':"
+              " TestAllTypes{single_string: 'hello'}})"
+          ),
+          False,
+      ),
+      (
+          "call_second_arg",
+          "show([1, 2], TestAllTypes{single_string: 'hello'})",
+          False,
+      ),
+      (
+          "call_optional",
+          "show(optional.of(TestAllTypes{single_string: 'hello'}))",
+          False,
+      ),
+  )
+  def testProto_cannotFindMessageClass(self, expr: str, expect_exception: bool):
     orig_get_message_class = message_factory.GetMessageClass
 
     def failing_get_message_class(descriptor):
@@ -375,20 +407,109 @@ class _CelTestBase(absltest.TestCase):
 
     try:
       message_factory.GetMessageClass = failing_get_message_class
-      env = cel.NewEnv(options=self.options)
-      expr = env.compile(
-          "cel.expr.conformance.proto2.TestAllTypes{single_string: 'hello'}"
+      called = []
+
+      def show(x):
+        called.append(x)
+        return "ok"
+
+      def show_pair(a, b):
+        called.append((a, b))
+        return "ok"
+
+      ext = cel.CelExtension(
+          "show_ext",
+          functions=[
+              cel.FunctionDecl(
+                  "show",
+                  [
+                      cel.Overload(
+                          "show_any", cel.Type.STRING, [cel.Type.DYN], impl=show
+                      ),
+                      cel.Overload(
+                          "show_pair",
+                          cel.Type.STRING,
+                          [cel.Type.DYN, cel.Type.DYN],
+                          impl=show_pair,
+                      ),
+                  ],
+              )
+          ],
       )
-      res = expr.eval(env.Activation())
-      with self.assertRaisesRegex(
-          TypeError, "Couldn't find message class for type"
-      ):
-        res.plain_value()
-      del res
-      del expr
-      del env
+      env = cel.NewEnv(
+          extensions=[ext_optional.ExtOptional(), ext],
+          options=self.options,
+          container="cel.expr.conformance.proto2",
+      )
+      res = env.compile(expr).eval(env.Activation())
+      if expect_exception:
+        with self.assertRaisesRegex(
+            TypeError, "Couldn't find message class for type"
+        ):
+          res.plain_value()
+      else:
+        # During evaluation of the function argument, the proto type will
+        # fail to resolve to a message class, and the error will be
+        # wrapped in an ERROR type. The function itself will not be called.
+        self.assertEqual(res.type(), cel.Type.ERROR)
+        self.assertIn("Couldn't find message class for type", res.value())
+      self.assertEqual(called, [])
     finally:
       message_factory.GetMessageClass = orig_get_message_class
+
+  def testCustomFunction_raisesException(self):
+    def fail(x):
+      raise ValueError(f"bad value: {x}")
+
+    ext = cel.CelExtension(
+        "fail_ext",
+        functions=[
+            cel.FunctionDecl(
+                "fail",
+                [
+                    cel.Overload(
+                        "fail_int", cel.Type.STRING, [cel.Type.INT], impl=fail
+                    )
+                ],
+            )
+        ],
+    )
+    env = cel.NewEnv(extensions=[ext], options=self.options)
+    res = env.compile("fail(42)").eval(env.Activation())
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn("bad value: 42", res.value())
+
+  def testCustomFunction_invalidReturnWithBrokenRepr(self):
+    class BrokenReprCallable:
+
+      def __call__(self, x):
+        del x
+        return "not_an_int"
+
+      def __repr__(self):
+        raise RuntimeError("repr failed")
+
+    env = cel.NewEnv(
+        functions=[
+            cel.FunctionDecl(
+                "broken_repr",
+                [
+                    cel.Overload(
+                        "broken_repr_int",
+                        cel.Type.INT,
+                        [cel.Type.INT],
+                        impl=BrokenReprCallable(),
+                    )
+                ],
+            )
+        ],
+        options=self.options,
+    )
+    res = env.compile("broken_repr(1)").eval()
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn(
+        "Unexpected value type for 'Python function '<unknown>''", res.value()
+    )
 
   def testEvalList(self):
     res: cel.Value = self._eval(
@@ -742,6 +863,17 @@ class _CelTestBase(absltest.TestCase):
         {"value": b"foo", "type": cel.Type.BYTES},
         {"value": bytearray("bar", "ascii"), "type": cel.Type.BYTES},
         {
+            "value": datetime.datetime(
+                2025, 1, 1, tzinfo=datetime.timezone.utc
+            ),
+            "type": cel.Type.TIMESTAMP,
+        },
+        {
+            "value": datetime.timedelta(seconds=15),
+            "type": cel.Type.DURATION,
+        },
+        {"value": cel.Type.INT, "type": cel.Type.TYPE},
+        {
             "value": msg,
             "type": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
         },
@@ -891,6 +1023,69 @@ class _CelTestBase(absltest.TestCase):
         cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
         cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
     )
+    self.assertTrue(cel.Type.DYN.is_assignable_from(cel.Type.INT))
+    self.assertTrue(
+        cel.Type.LIST.is_assignable_from(cel.Type.List(cel.Type.INT))
+    )
+    self.assertFalse(cel.Type.INT.is_assignable_from(cel.Type.DYN))
+    self.assertTrue(cel.Type("~T").is_assignable_from(cel.Type("~T")))
+    self.assertFalse(cel.Type("~T").is_assignable_from(cel.Type("~U")))
+    self.assertFalse(
+        cel.Type.TYPE.is_assignable_from(
+            cel.Type.AbstractType("optional_type", [cel.Type.INT])
+        )
+    )
+    self.assertTrue(
+        cel.Type.AbstractType(
+            "optional_type", [cel.Type.INT]
+        ).is_assignable_from(
+            cel.Type.AbstractType("optional_type", [cel.Type.INT])
+        )
+    )
+    self.assertFalse(
+        cel.Type.AbstractType(
+            "optional_type", [cel.Type.INT]
+        ).is_assignable_from(
+            cel.Type.AbstractType("optional_type", [cel.Type.STRING])
+        )
+    )
+    self.assertFalse(
+        cel.Type.AbstractType(
+            "optional_type", [cel.Type.INT]
+        ).is_assignable_from(
+            cel.Type.AbstractType("other_type", [cel.Type.INT])
+        )
+    )
+
+    box_int = cel.Type.AbstractType("my_box", [cel.Type.INT])
+    box_dyn = cel.Type.AbstractType("my_box", [cel.Type.DYN])
+    other_box_int = cel.Type.AbstractType("other_box", [cel.Type.INT])
+    self.assertEqual(cel.Type("my_box<int>"), box_int)
+    self.assertEqual(box_int.name(), "my_box<INT>")
+    self.assertTrue(box_dyn.is_assignable_from(box_int))
+    self.assertTrue(box_int.is_assignable_from(box_int))
+    self.assertFalse(other_box_int.is_assignable_from(box_int))
+    self.assertTrue(cel.Type.AbstractType("my_box").is_assignable_from(box_int))
+    self.assertFalse(
+        box_int.is_assignable_from(cel.Type.AbstractType("my_box"))
+    )
+    self.assertFalse(
+        box_int.is_assignable_from(
+            cel.Type.AbstractType("my_box", [cel.Type.INT, cel.Type.STRING])
+        )
+    )
+    self.assertEqual(cel.Type("google.protobuf.Timestamp"), cel.Type.TIMESTAMP)
+    self.assertEqual(cel.Type("google.protobuf.Duration"), cel.Type.DURATION)
+
+  def testCheckedExprTypeParamReturnType(self):
+    checked_expr = checked_pb.CheckedExpr()
+    checked_expr.expr.id = 1
+    checked_expr.expr.ident_expr.name = "var_tp"
+    checked_expr.type_map[1].type_param = "T"
+    packed = any_pb.Any()
+    packed.Pack(checked_expr)
+    expr: cel.Expression = self.env.deserialize(packed.SerializeToString())
+    self.assertEqual(expr.return_type(), cel.Type("~T"))
 
   def testCelExpressionPersistence_checkedExpr(self):
     expr: cel.Expression = self.env.compile("var_msg.single_string")
@@ -1064,6 +1259,19 @@ class _CelTestBase(absltest.TestCase):
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn("Custom pool error", str(res.value()))
 
+  def testTypeToCelValueError(self):
+    bad_env = cel.NewEnv(
+        _RaisingDescriptorPool(),
+        variables={"var_type": cel.Type.TYPE},
+        options=self.options,
+    )
+    expr = bad_env.compile("var_type", disable_check=True)
+    res = expr.eval(
+        data={"var_type": cel.Type("cel.expr.conformance.proto2.TestSomeTypes")}
+    )
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn("Custom pool error", str(res.value()))
+
   def testValueOutlivesExpression(self):
     expr: cel.Expression = self.env.compile("'hello ' + 'world'")
     val: cel.Value = expr.eval()
@@ -1079,6 +1287,464 @@ class _CelTestBase(absltest.TestCase):
     val = expr.eval()
     del expr
     self.assertEqual(val.plain_value(), ["a", "b", "c"])
+
+  def testOptionalPythonObject(self):
+    none_opt = cel.Optional.none()
+    self.assertEqual(none_opt, cel.Optional())
+    self.assertFalse(none_opt.has_value())
+    self.assertFalse(bool(none_opt))
+    self.assertEqual(none_opt.or_value("fallback"), "fallback")
+    self.assertEqual(repr(none_opt), "optional.none()")
+    with self.assertRaisesRegex(ValueError, r"optional\.none\(\) dereference"):
+      none_opt.value()
+
+    int_opt = cel.Optional.of(42)
+    self.assertTrue(int_opt.has_value())
+    self.assertTrue(bool(int_opt))
+    self.assertEqual(int_opt.value(), 42)
+    self.assertEqual(int_opt.or_value(0), 42)
+    self.assertEqual(repr(int_opt), "optional.of(42)")
+    self.assertEqual(int_opt, cel.Optional.of(42))
+    self.assertNotEqual(int_opt, cel.Optional.of(43))
+    self.assertNotEqual(int_opt, none_opt)
+    self.assertNotEqual(int_opt, 42)
+    self.assertNotEqual(none_opt, None)  # pylint: disable=g-generic-assert
+
+    false_opt = cel.Optional.of(False)
+    self.assertTrue(false_opt.has_value())
+    self.assertTrue(bool(false_opt))
+    self.assertIs(false_opt.value(), False)
+
+    null_opt = cel.Optional.of(None)
+    self.assertTrue(null_opt.has_value())
+    self.assertTrue(bool(null_opt))
+    self.assertIsNone(null_opt.value())
+    self.assertIsNone(null_opt.or_value("fallback"))
+    self.assertEqual(null_opt, cel.Optional.of(None))
+    self.assertNotEqual(null_opt, none_opt)
+
+    self.assertEqual(cel.Optional[int].__origin__, cel.Optional)
+
+    nan = float("nan")
+    nan_opt = cel.Optional.of(nan)
+    self.assertNotEqual(nan_opt, nan_opt)
+    self.assertNotEqual(nan_opt, cel.Optional.of(float("nan")))
+
+    class RaisingEq:
+
+      def __eq__(self, other: object) -> bool:
+        raise RuntimeError("boom")
+
+    with self.assertRaisesRegex(RuntimeError, "boom"):
+      _ = cel.Optional.of(RaisingEq()) == cel.Optional.of(RaisingEq())
+
+  def testOptionalType(self):
+    self.assertEqual(cel.Type.OPTIONAL, cel.Type.Optional())
+    self.assertEqual(cel.Type.OPTIONAL, cel.Type.Optional(cel.Type.DYN))
+    self.assertEqual(cel.Type.OPTIONAL, cel.Type("optional_type"))
+    self.assertEqual(cel.Type.OPTIONAL, cel.Type("optional_type<dyn>"))
+    self.assertEqual(
+        cel.Type.Optional(cel.Type.INT), cel.Type("optional_type<int>")
+    )
+    self.assertEqual(
+        cel.Type.Optional(cel.Type.INT),
+        cel.Type.AbstractType("optional_type", [cel.Type.INT]),
+    )
+    self.assertTrue(
+        cel.Type.OPTIONAL.is_assignable_from(cel.Type.Optional(cel.Type.INT))
+    )
+    self.assertTrue(
+        cel.Type.Optional(cel.Type.INT).is_assignable_from(
+            cel.Type.Optional(cel.Type.INT)
+        )
+    )
+    self.assertFalse(
+        cel.Type.Optional(cel.Type.INT).is_assignable_from(
+            cel.Type.Optional(cel.Type.STRING)
+        )
+    )
+    self.assertFalse(
+        cel.Type.AbstractType("other_type", [cel.Type.INT]).is_assignable_from(
+            cel.Type.Optional(cel.Type.INT)
+        )
+    )
+
+  def testEvalOptional(self):
+    res = self._eval(
+        "optional.of(42)",
+        expected_return_type=cel.Type.Optional(cel.Type.INT),
+    )
+    self.assertEqual(res.type(), cel.Type.OPTIONAL)
+    self.assertEqual(res.plain_value(), cel.Optional.of(42))
+    self.assertTrue(res.value().has_value())
+    self.assertEqual(res.value().value().type(), cel.Type.INT)
+    self.assertEqual(res.value().value().value(), 42)
+
+    res = self._eval("optional.none()", expected_return_type=cel.Type.OPTIONAL)
+    self.assertEqual(res.type(), cel.Type.OPTIONAL)
+    self.assertEqual(res.plain_value(), cel.Optional.none())
+    self.assertEqual(res.value(), cel.Optional.none())
+
+    res = self._eval("optional.of(null)")
+    plain_opt = res.plain_value()
+    self.assertIsInstance(plain_opt, cel.Optional)
+    self.assertEqual(plain_opt, cel.Optional.of(None))
+    self.assertIsNone(plain_opt.value())
+
+    res = self._eval("[optional.of(1), optional.none()]")
+    self.assertEqual(
+        res.plain_value(), [cel.Optional.of(1), cel.Optional.none()]
+    )
+
+    res = self._eval(
+        "{'present': optional.of('hi'), 'absent': optional.none()}"
+    )
+    self.assertEqual(
+        res.plain_value(),
+        {"present": cel.Optional.of("hi"), "absent": cel.Optional.none()},
+    )
+
+    res = self._eval(
+        "var_opt_int",
+        {"var_opt_int": cel.Optional.of(7)},
+        expected_return_type=cel.Type.Optional(cel.Type.INT),
+    )
+    self.assertEqual(res.plain_value(), cel.Optional.of(7))
+
+    res = self._eval(
+        "var_opt_int.orValue(99)", {"var_opt_int": cel.Optional.none()}
+    )
+    self.assertEqual(res.value(), 99)
+
+    res = self._eval("var_dyn", {"var_dyn": cel.Optional.of("abc")})
+    self.assertEqual(res.type(), cel.Type.OPTIONAL)
+    self.assertEqual(res.plain_value(), cel.Optional.of("abc"))
+
+    res = self._eval("var_opt_int", {"var_opt_int": 42})
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn(
+        "Unexpected value type for 'var_opt_int': int. (Expected"
+        " optional_type<INT>)",
+        res.value(),
+    )
+
+    res = self._eval("var_opt_int", {"var_opt_int": cel.Optional.of("bad")})
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn(
+        "Unexpected value type for 'var_opt_int.value()': str. (Expected INT)",
+        res.value(),
+    )
+
+    opaque_env = cel.NewEnv(
+        variables={
+            "var_untyped_opt": cel.Type.AbstractType("optional_type"),
+            "var_opaque": cel.Type.AbstractType("other_type", [cel.Type.INT]),
+        },
+        extensions=[ext_optional.ExtOptional()],
+        options=self.options,
+    )
+    untyped_expr = opaque_env.compile("var_untyped_opt")
+    res = untyped_expr.eval(
+        opaque_env.Activation({"var_untyped_opt": cel.Optional.of(123)})
+    )
+    self.assertEqual(res.plain_value(), cel.Optional.of(123))
+
+    opaque_expr = opaque_env.compile("var_opaque")
+    res = opaque_expr.eval(opaque_env.Activation({"var_opaque": 123}))
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn("Unimplemented opaque type: other_type", res.value())
+
+  def testOptionalEquals(self):
+    opt_42 = self._eval("optional.of(42)")
+    opt_43 = self._eval("optional.of(43)")
+    opt_none = self._eval("optional.none()")
+    opt_null = self._eval("optional.of(null)")
+
+    # Basic optional equality with == and equals().
+    self.assertEqual(opt_42, self._eval("optional.of(42)"))
+    self.assertEqual(opt_42, cel.Optional.of(42))
+    self.assertEqual(cel.Optional.of(42), opt_42)
+    self.assertNotEqual(opt_42, opt_43)
+    self.assertNotEqual(opt_42, opt_none)
+    self.assertNotEqual(opt_42, self._eval("42"))
+    self.assertNotEqual(self._eval("42"), opt_42)
+    self.assertNotEqual(opt_42, 42)
+    self.assertNotEqual(42, opt_42)
+    self.assertTrue(opt_42.equals(self._eval("optional.of(42)")))
+    self.assertFalse(opt_42.equals(opt_43))
+    self.assertFalse(opt_42.equals(opt_none))
+    self.assertFalse(opt_42.equals(self._eval("42")))
+    self.assertFalse(self._eval("42").equals(opt_42))
+    with self.assertRaises(TypeError):
+      non_cel_opt: Any = cel.Optional.of(42)
+      opt_42.equals(non_cel_opt)
+
+    # Empty and null-holding optionals.
+    self.assertEqual(opt_none, self._eval("optional.none()"))
+    self.assertEqual(opt_none, cel.Optional.none())
+    self.assertEqual(cel.Optional.none(), opt_none)
+    self.assertNotEqual(opt_none, opt_null)
+    self.assertNotEqual(opt_none, self._eval("null"))
+    self.assertNotEqual(self._eval("null"), opt_none)
+    self.assertNotEqual(opt_none, None)
+    self.assertNotEqual(None, opt_none)
+    self.assertTrue(opt_none.equals(self._eval("optional.none()")))
+    self.assertFalse(opt_none.equals(opt_null))
+    self.assertFalse(opt_none.equals(self._eval("null")))
+    self.assertFalse(self._eval("null").equals(opt_none))
+
+    self.assertEqual(opt_null, self._eval("optional.of(null)"))
+    self.assertEqual(opt_null, cel.Optional.of(None))
+    self.assertEqual(cel.Optional.of(None), opt_null)
+    self.assertTrue(opt_null.equals(self._eval("optional.of(null)")))
+    self.assertFalse(opt_null.equals(opt_none))
+    self.assertFalse(opt_null.equals(self._eval("null")))
+
+    # Cross-numeric, bool-vs-int, and precision differences between == and
+    # equals().
+    opt_int = self._eval("optional.of(1)")
+    opt_uint = self._eval("optional.of(1u)")
+    opt_double = self._eval("optional.of(1.0)")
+    opt_bool = self._eval("optional.of(true)")
+    self.assertEqual(opt_int, opt_uint)
+    self.assertEqual(opt_int, opt_double)
+    self.assertEqual(opt_uint, opt_double)
+    self.assertTrue(opt_int.equals(opt_uint))
+    self.assertTrue(opt_int.equals(opt_double))
+    self.assertTrue(opt_uint.equals(opt_double))
+    self.assertEqual(opt_bool, opt_int)
+    self.assertEqual(opt_bool, cel.Optional.of(1))
+    self.assertFalse(opt_bool.equals(opt_int))
+
+    exact_int_opt = self._eval("optional.of(9007199254740993)")
+    approx_double_opt = self._eval("optional.of(9007199254740992.0)")
+    self.assertNotEqual(exact_int_opt, approx_double_opt)
+    self.assertTrue(exact_int_opt.equals(approx_double_opt))
+
+    # NaN inside optional is unequal to itself in both Python and CEL.
+    nan_opt = self._eval("optional.of(0.0 / 0.0)")
+    self.assertNotEqual(nan_opt, nan_opt)
+    self.assertNotEqual(nan_opt, self._eval("optional.of(0.0 / 0.0)"))
+    self.assertFalse(nan_opt.equals(nan_opt))
+    self.assertFalse(nan_opt.equals(self._eval("optional.of(0.0 / 0.0)")))
+
+    # Nested optionals and containers with optionals.
+    self.assertEqual(
+        self._eval("optional.of(optional.of(1))"),
+        self._eval("optional.of(optional.of(1u))"),
+    )
+    self.assertEqual(
+        self._eval("optional.of(optional.of(1))"),
+        cel.Optional.of(cel.Optional.of(1)),
+    )
+    self.assertEqual(
+        cel.Optional.of(cel.Optional.of(1)),
+        self._eval("optional.of(optional.of(1))"),
+    )
+    self.assertTrue(
+        self._eval("optional.of(optional.of(1))").equals(
+            self._eval("optional.of(optional.of(1u))")
+        )
+    )
+    self.assertEqual(
+        self._eval("optional.of(optional.of(true))"),
+        self._eval("optional.of(optional.of(1))"),
+    )
+    self.assertFalse(
+        self._eval("optional.of(optional.of(true))").equals(
+            self._eval("optional.of(optional.of(1))")
+        )
+    )
+    self.assertEqual(
+        self._eval("optional.of(optional.none())"),
+        cel.Optional.of(cel.Optional.none()),
+    )
+    self.assertTrue(
+        self._eval("optional.of(optional.none())").equals(
+            self._eval("optional.of(optional.none())")
+        )
+    )
+
+    opt_list = self._eval("[optional.of(1), optional.none()]")
+    self.assertEqual(opt_list, [cel.Optional.of(1), cel.Optional.none()])
+    self.assertEqual([cel.Optional.of(1), cel.Optional.none()], opt_list)
+    self.assertTrue(
+        opt_list.equals(self._eval("[optional.of(1u), optional.none()]"))
+    )
+    self.assertFalse(
+        self._eval("[optional.of(true)]").equals(self._eval("[optional.of(1)]"))
+    )
+    self.assertEqual(opt_list.value()[0], cel.Optional.of(1))
+    self.assertTrue(opt_list.value()[0].equals(self._eval("optional.of(1u)")))
+
+    opt_map = self._eval("{'a': optional.of(1), 'b': optional.none()}")
+    self.assertEqual(
+        opt_map, {"a": cel.Optional.of(1), "b": cel.Optional.none()}
+    )
+    self.assertTrue(
+        opt_map.equals(
+            self._eval("{'a': optional.of(1.0), 'b': optional.none()}")
+        )
+    )
+    self.assertEqual(opt_map.value()["a"], cel.Optional.of(1))
+    self.assertTrue(opt_map.value()["a"].equals(self._eval("optional.of(1u)")))
+
+    self.assertTrue(
+        self._eval("optional.of([1, 2])").equals(
+            self._eval("optional.of([1u, 2.0])")
+        )
+    )
+    self.assertEqual(self._eval("optional.of([1, 2])"), cel.Optional.of([1, 2]))
+
+    # Proto messages inside optionals.
+    msg1 = test_all_types_pb.TestAllTypes()
+    msg1.single_any.Pack(
+        test_all_types_pb.TestAllTypes(single_int32=1, single_string="a")
+    )
+    msg2 = test_all_types_pb.TestAllTypes()
+    msg2.single_any.type_url = msg1.single_any.type_url
+    msg2.single_any.value = (
+        test_all_types_pb.TestAllTypes(single_string="a").SerializeToString()
+        + test_all_types_pb.TestAllTypes(single_int32=1).SerializeToString()
+    )
+    opt_msg1 = self._eval("optional.of(var_msg)", {"var_msg": msg1})
+    opt_msg2 = self._eval("optional.of(var_msg)", {"var_msg": msg2})
+    self.assertEqual(opt_msg1, cel.Optional.of(msg1))
+    # == delegates to Python protobuf Message.__eq__ (whose Any handling varies
+    # across protobuf runtimes), whereas equals() uses CEL MessageEquals.
+    self.assertEqual(opt_msg1 == opt_msg2, msg1 == msg2)
+    self.assertTrue(opt_msg1.equals(opt_msg2))
+    other_msg = test_all_types_pb.TestAllTypes(single_int32=2)
+    opt_other_msg = self._eval("optional.of(var_msg)", {"var_msg": other_msg})
+    self.assertNotEqual(opt_msg1, opt_other_msg)
+    self.assertFalse(opt_msg1.equals(opt_other_msg))
+
+    # Error values vs optionals.
+    err_val = self._eval("var_bool", {})
+    self.assertNotEqual(opt_42, err_val)
+    self.assertNotEqual(err_val, opt_42)
+    self.assertNotEqual(opt_none, err_val)
+    self.assertNotEqual(err_val, opt_none)
+    self.assertFalse(opt_42.equals(err_val))
+    self.assertFalse(err_val.equals(opt_42))
+    self.assertFalse(opt_none.equals(err_val))
+    self.assertFalse(err_val.equals(opt_none))
+    self.assertEqual(cel.Optional.of(err_val), cel.Optional.of(err_val))
+    self.assertNotEqual(
+        cel.Optional.of(err_val), cel.Optional.of(err_val.value())
+    )
+
+    # Custom matchers via reflected __eq__.
+    class _AlwaysEqual:
+
+      def __eq__(self, other: object) -> bool:
+        return True
+
+    always_equal = _AlwaysEqual()
+    self.assertEqual(opt_42, always_equal)
+    self.assertEqual(always_equal, opt_42)
+    self.assertEqual(opt_42, cel.Optional.of(always_equal))
+    self.assertEqual(cel.Optional.of(always_equal), opt_42)
+
+  def testOptionalWithPythonFunctions(self):
+    def show(x: Any) -> str:
+      return repr(x)
+
+    def positive_only(n: int) -> cel.Optional[int]:
+      return cel.Optional.of(n) if n > 0 else cel.Optional.none()
+
+    def unwrap_or_zero(opt: cel.Optional[int]) -> int:
+      return opt.or_value(0)
+
+    env = cel.NewEnv(
+        variables={"m": cel.Type.DYN},
+        extensions=[ext_optional.ExtOptional()],
+        functions=[
+            cel.FunctionDecl(
+                "show",
+                [
+                    cel.Overload(
+                        "show_any",
+                        cel.Type.STRING,
+                        [cel.Type("any")],
+                        impl=show,
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "show_dyn",
+                [
+                    cel.Overload(
+                        "show_dyn_ovl",
+                        cel.Type.STRING,
+                        [cel.Type.DYN],
+                        impl=show,
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "positive_only",
+                [
+                    cel.Overload(
+                        signature="positive_only(int)",
+                        return_type=cel.Type.Optional(cel.Type.INT),
+                        impl=positive_only,
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "unwrap_or_zero",
+                [
+                    cel.Overload(
+                        "unwrap_or_zero_opt_int",
+                        return_type=cel.Type.INT,
+                        parameters=[cel.Type.Optional(cel.Type.INT)],
+                        impl=unwrap_or_zero,
+                    )
+                ],
+            ),
+        ],
+        options=self.options,
+    )
+    act = env.Activation({"m": {"a": 1}})
+
+    self.assertEqual(
+        env.compile("show(m[?'a'])").eval(act).value(), "optional.of(1)"
+    )
+    self.assertEqual(
+        env.compile("show(m[?'missing'])").eval(act).value(), "optional.none()"
+    )
+    self.assertEqual(
+        env.compile("show(optional.of(1))").eval(act).value(), "optional.of(1)"
+    )
+    self.assertEqual(
+        env.compile("show({'k': optional.of(1)})").eval(act).value(),
+        "{'k': optional.of(1)}",
+    )
+    self.assertEqual(
+        env.compile("show([optional.of(1), optional.none()])")
+        .eval(act)
+        .value(),
+        "[optional.of(1), optional.none()]",
+    )
+    self.assertEqual(
+        env.compile("show_dyn(optional.of('ok'))").eval(act).value(),
+        "optional.of('ok')",
+    )
+    self.assertEqual(
+        env.compile("positive_only(5).orValue(0)").eval(act).value(), 5
+    )
+    self.assertEqual(
+        env.compile("positive_only(-5).orValue(0)").eval(act).value(), 0
+    )
+    self.assertEqual(
+        env.compile("unwrap_or_zero(optional.of(5))").eval(act).value(), 5
+    )
+    self.assertEqual(
+        env.compile("unwrap_or_zero(optional.none())").eval(act).value(), 0
+    )
+    del act
+    del env
 
 
 class CompatibleNumber:

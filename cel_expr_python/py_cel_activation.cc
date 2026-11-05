@@ -67,7 +67,12 @@ PyCelActivation::PyCelActivation(
   for (const auto& function : functions) {
     std::vector<cel::Kind> parameters;
     for (const auto& parameter : function->parameters()) {
-      parameters.push_back(parameter.GetKind());
+      if (parameter.GetKind() == cel::Kind::kDyn ||
+          parameter.GetKind() == cel::Kind::kTypeParam) {
+        parameters.push_back(cel::Kind::kAny);
+      } else {
+        parameters.push_back(parameter.GetKind());
+      }
     }
     cel::FunctionDescriptor func_descriptor(function->function_name(),
                                             function->is_member(), parameters,

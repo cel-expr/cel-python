@@ -77,6 +77,14 @@ class BasicTest(unittest.TestCase):
     # Test optional
     expr = env.compile("optional.of('test').orValue('fallback')")
     self.assertEqual(expr.eval().value(), "test")
+    self.assertEqual(
+        env.compile("optional.of('test')").eval().plain_value(),
+        cel.Optional.of("test"),
+    )
+    self.assertEqual(
+        env.compile("optional.none()").eval().plain_value(),
+        cel.Optional.none(),
+    )
 
     # Test strings
     expr = env.compile("strings.quote('abc')")
@@ -192,6 +200,7 @@ class BasicTest(unittest.TestCase):
             ("cel_expr_python/", "cel_expr_python-", "cel_expr_python.libs/")
         )
         or f.endswith("_test.py")
+        or f == "cel_expr_python/leak_check.py"
         or "/testdata/" in f
     ]
     self.assertEqual(

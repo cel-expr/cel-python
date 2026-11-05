@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_python//python:py_library.bzl", "py_library")
 load("@rules_python//python:py_test.bzl", "py_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -20,6 +21,7 @@ pybind_library(
         "py_cel_expression.cc",
         "py_cel_function.cc",
         "py_cel_function_decl.cc",
+        "py_cel_optional.cc",
         "py_cel_options.cc",
         "py_cel_overload.cc",
         "py_cel_python_extension.cc",
@@ -38,6 +40,7 @@ pybind_library(
         "py_cel_expression.h",
         "py_cel_function.h",
         "py_cel_function_decl.h",
+        "py_cel_optional.h",
         "py_cel_options.h",
         "py_cel_overload.h",
         "py_cel_python_extension.h",
@@ -50,6 +53,7 @@ pybind_library(
     tags = ["freethreading_compatible"],
     visibility = [":__subpackages__"],
     deps = [
+        ":cel_compiler_capsule",
         ":cel_extension",
         ":status_macros",
         "@com_google_absl//absl/base",
@@ -142,6 +146,18 @@ pybind_library(
     ],
 )
 
+# Shares the `cel::Compiler` owned by a `cel.Env` with separately loaded
+# pybind11 modules (e.g. `cel_policy`).
+pybind_library(
+    name = "cel_compiler_capsule",
+    hdrs = ["cel_compiler_capsule.h"],
+    tags = ["freethreading_compatible"],
+    deps = [
+        ":cel_extension",
+        "@com_google_cel_cpp//compiler",
+    ],
+)
+
 cc_library(
     name = "status_macros",
     hdrs = ["status_macros.h"],
@@ -150,20 +166,34 @@ cc_library(
     ],
 )
 
+py_library(
+    name = "leak_check",
+    testonly = True,
+    srcs = ["leak_check.py"],
+    visibility = [":__subpackages__"],
+)
+
 py_test(
     name = "cel_test",
     srcs = ["cel_test.py"],
     data = [
         ":cel",
+        "//cel_expr_python/ext:ext_optional",
     ],
     deps = [
+        ":leak_check",
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
+        "@com_google_cel_spec//proto/cel/expr:checked_py_pb2",
         "@com_google_protobuf//:protobuf",
         "@com_google_protobuf//:protobuf_python",
     ] + select({
         "@platforms//os:windows": [],
-        "//conditions:default": [":cel"],
+        "//conditions:default": [
+            ":cel",
+            "//cel_expr_python/ext:ext_optional",
+        ],
     }),
 )
 
@@ -174,6 +204,7 @@ py_test(
         ":cel",
     ],
     deps = [
+        ":leak_check",
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
     ] + select({
@@ -196,6 +227,7 @@ py_test(
     deps = [
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
     ] + select({
         "@platforms//os:windows": [],
         "//conditions:default": [
