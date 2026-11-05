@@ -78,13 +78,6 @@ class ConformanceTestSuite(unittest.TestSuite):
       "proto3/set_null/map_timestamp_null_pruned",
       "proto3/set_null/map_duration_null_pruned",
       "proto3/set_null/map_wrapper_null_pruned",
-      # TODO(b/577138668): C++ type checker bug, though lower priority.
-      "type_deduction/type_decay/type_list_decay",
-      "type_deduction/type_decay/type_ternary_decay",
-      "type_deduction/type_decay/type_free_param_list_decay",
-      "type_deduction/type_decay/type_free_param_list_decay_order_independent",
-      "type_deduction/type_decay/type_nested_list_decay",
-      "type_deduction/type_decay/type_free_param_list_concat",
       # Skip until duration/timestamp range and proto wrapper validation is updated for spec parity.
       "timestamps/timestamp_arithmetic/add_duration_to_duration_max",
       "timestamps/timestamp_arithmetic/subtract_duration_from_duration_min",
@@ -317,8 +310,13 @@ class ConformanceTest(absltest.TestCase):
               for param in tp.abstract_type.parameter_types
           ],
       )
+    elif kind == "type":
+      # An unset type parameter denotes the unparameterized `type`.
+      if tp.type.WhichOneof("type_kind") is None:
+        return cel.Type.TYPE
+      return cel.Type.Type(self._convert_type(tp.type))
     else:
-      self.fail("Unsupported type: " + str(type))
+      self.fail("Unsupported type: " + str(tp))
 
   def _convert_value(self, value: value_pb.Value) -> Any:
     if value.HasField("null_value"):
@@ -503,6 +501,8 @@ class ConformanceTest(absltest.TestCase):
               ],
           ),
       )
+    elif kind == "type":
+      self.assertEqual(result_type, self._convert_type(expected_type))
     else:
       self.fail("Unsupported type validation: " + str(expected_type))
 

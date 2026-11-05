@@ -681,25 +681,27 @@ class _CelTestBase(absltest.TestCase):
         cel.Type.Type(cel.Type.STRING).is_assignable_from(expr.return_type())
     )
 
-    # The following two tests demonstrate a quirk of CEL assignability
-    # rules. In the case of type checking, `type(1)` is deemed to be
-    # *not* assignable to Type.STRING. However, in runtime use, it would be seen
-    # as assignable.
+    # When the branches of a conditional produce type values whose parameters
+    # are not co-assignable, the checker unifies them to `type(dyn)`.
+    expr = self.env.compile("var_bool ? type('a') : type(1)")
+    self.assertEqual(expr.return_type(), cel.Type.Type(cel.Type.DYN))
+    self.assertFalse(
+        cel.Type.Type(cel.Type.STRING).is_assignable_from(expr.return_type())
+    )
+
     res = self._eval(
         "var_bool ? type('a') : type(1)",
         {"var_bool": True},
-        expected_return_type=cel.Type.Type(cel.Type.STRING),
+        expected_return_type=cel.Type.Type(cel.Type.DYN),
     )
     self.assertEqual(res.value(), cel.Type.STRING)
 
     res = self._eval(
         "var_bool ? type('a') : type(1)",
         {"var_bool": False},
-        expected_return_type=cel.Type.Type(cel.Type.STRING),
+        expected_return_type=cel.Type.Type(cel.Type.DYN),
     )
-    self.assertEqual(
-        res.value(), cel.Type.INT
-    )  # This behavior is counterintuitive but works as implemented.
+    self.assertEqual(res.value(), cel.Type.INT)
 
   def testTypeInitSignature(self):
     self.assertEqual(cel.Type("int"), cel.Type.INT)
