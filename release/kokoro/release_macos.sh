@@ -57,7 +57,7 @@ trap 'echo "Cleaning up temporary directories: ${REPO_DIR} ${TMP_DIR}"; rm -rf "
 pushd "${TMP_DIR}"
 
 cp -r "${SRC_DIR}"/{*,.*} . 2>/dev/null || true
-cp "${SRC_DIR}"/release/* . 2>/dev/null || true
+cp "${SRC_DIR}"/release/*.py "${SRC_DIR}"/release/*.toml . 2>/dev/null || true
 rm -rf cel_expr_python/*_test.py
 
 # Check if pyproject.toml exists before running sed

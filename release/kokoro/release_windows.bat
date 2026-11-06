@@ -113,9 +113,16 @@ if !ERRORLEVEL! NEQ 0 (
     goto cleanup
 )
 
-xcopy /Y "%SRC_DIR%\release\*.*" .
+xcopy /Y "%SRC_DIR%\release\*.py" .
 if !ERRORLEVEL! NEQ 0 (
-    echo Failed to copy release configs!
+    echo Failed to copy release python files!
+    set "RELEASE_STATUS=1"
+    popd
+    goto cleanup
+)
+xcopy /Y "%SRC_DIR%\release\*.toml" .
+if !ERRORLEVEL! NEQ 0 (
+    echo Failed to copy release toml files!
     set "RELEASE_STATUS=1"
     popd
     goto cleanup

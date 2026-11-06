@@ -41,13 +41,13 @@
 # - Install the resulting wheel:
 #
 #   ```
-#   pip install --force-reinstall wheelhouse/py_cel-*.whl
+#   pip install --force-reinstall wheelhouse/cel_expr_python-*.whl
 #   ```
 #
 # - Verify that the wheel is working correctly
 #
 #   ```
-#   python release/py_cel_basic_test.py
+#   python release/cel_basic_test.py
 #   ```
 
 set -e
@@ -69,23 +69,29 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 else
   cp -r "${SRC_DIR}/." .
 fi
-cp release/* .
 rm -rf cel_expr_python/*_test.py
+
+PYTHON_BIN="python"
+if command -v python3 &> /dev/null; then
+  PYTHON_BIN="python3"
+fi
+
+if [ -z "${CIBWHEEL_BIN}" ]; then
+  CIBWHEEL_BIN="${PYTHON_BIN} -m cibuildwheel"
+fi
+
+echo "--- Building cel-expr-python wheels ---"
+cp release/*.py release/*.toml .
 
 # Substitute $VERSION in pyproject.toml with the value of VERSION.
 if [[ "$OSTYPE" == "darwin"* ]]; then
   sed -i '' "s/\$VERSION/${VERSION}/g" pyproject.toml
 else
-  python -c "import sys; content = open('pyproject.toml').read(); open('pyproject.toml', 'w').write(content.replace('\$VERSION', sys.argv[1]))" "${VERSION}"
+  "${PYTHON_BIN}" -c "import sys; content = open('pyproject.toml').read(); open('pyproject.toml', 'w').write(content.replace('\$VERSION', sys.argv[1]))" "${VERSION}"
 fi
 
-echo "Running cibuildwheel: ${CIBWHEEL_BIN:-python -m cibuildwheel}"
-${CIBWHEEL_BIN:-PYTHON_BIN="python"
-if command -v python3 &> /dev/null; then
-  PYTHON_BIN="python3"
-fi
-
-"$PYTHON_BIN" -m cibuildwheel} "$@"
+echo "Running cibuildwheel: ${CIBWHEEL_BIN}"
+${CIBWHEEL_BIN} "$@"
 
 echo "Copying generated wheels to ${SRC_DIR}/wheelhouse"
 mkdir -p "${SRC_DIR}"/wheelhouse

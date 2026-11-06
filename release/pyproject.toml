@@ -35,7 +35,14 @@ Codelab = "https://github.com/cel-expr/cel-python/blob/main/codelab/index.lab.md
 
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["codelab*", "conformance*", "custom_ext*", "release*", "testing*", "wheelhouse*"]
+include = ["cel_expr_python", "cel_expr_python.ext*"]
+exclude = ["*testdata*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.pyi"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["*_test.py"]
 
 [tool.cibuildwheel]
 build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
@@ -59,7 +66,7 @@ before-all = "git config --global http.sslVerify false && echo 'Installing bazel
 
 [tool.cibuildwheel.macos]
 archs = ["x86_64", "arm64"]
-before-all = "echo 'Installing bazelisk'; brew install bazelisk"
+before-all = "command -v bazelisk >/dev/null || (echo 'Installing bazelisk' && brew install bazelisk)"
 environment = { MACOSX_DEPLOYMENT_TARGET = "10.13" }
 
 [tool.cibuildwheel.windows]
