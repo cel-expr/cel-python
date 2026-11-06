@@ -15,6 +15,8 @@
 """Basic tests for cel-python."""
 
 import importlib.metadata
+import os
+import sys
 import unittest
 
 from cel_expr_python import cel
@@ -64,7 +66,7 @@ class BasicTest(unittest.TestCase):
 
     # Test lists
     expr = env.compile("lists.range(3)")
-    self.assertEqual(expr.eval().value(), [0, 1, 2])
+    self.assertEqual(expr.eval().plain_value(), [0, 1, 2])
 
     # Test math
     expr = env.compile("math.greatest(1, 5, 3)")
@@ -125,7 +127,22 @@ class BasicTest(unittest.TestCase):
     self.assertEqual(res.value(), "Hello, world! Hi, CEL!")
 
   def test_wheel_package_contents(self):
-    dist = importlib.metadata.distribution("cel-expr-python")
+    # Exclude the script's own directory (which may be the build directory
+    # containing a source `.egg-info`) so we inspect the installed wheel's
+    # `.dist-info` distribution in site-packages.
+    script_dir = os.path.realpath(os.path.dirname(os.path.abspath(__file__)))
+    search_paths = [
+        p for p in sys.path if p and os.path.realpath(p) != script_dir
+    ]
+    dists = list(
+        importlib.metadata.distributions(
+            name="cel-expr-python", path=search_paths
+        )
+    )
+    self.assertTrue(
+        dists, "Could not find installed cel-expr-python distribution"
+    )
+    dist = dists[0]
     top_level = dist.read_text("top_level.txt")
     if top_level is not None:
       self.assertEqual(top_level.strip().splitlines(), ["cel_expr_python"])
