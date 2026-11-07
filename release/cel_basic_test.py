@@ -66,6 +66,8 @@ class BasicTest(unittest.TestCase):
 
     # Test lists
     expr = env.compile("lists.range(3)")
+    self.assertEqual(expr.eval(), [0, 1, 2])
+    self.assertEqual(expr.eval().value(), [0, 1, 2])
     self.assertEqual(expr.eval().plain_value(), [0, 1, 2])
 
     # Test math

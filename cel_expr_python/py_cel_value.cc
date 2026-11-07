@@ -74,6 +74,46 @@ void PyCelValue::DefinePythonBindings(py::module& m) {
              }
              return py::reinterpret_borrow<py::object>(obj);
            })
+      .def(
+          "__eq__",
+          [](PyCelValue& self, py::handle other) {
+            bool self_is_error = self.IsError();
+            bool other_is_cel = py::isinstance<PyCelValue>(other);
+            py::object other_obj = py::reinterpret_borrow<py::object>(other);
+            if (other_is_cel) {
+              PyCelValue& other_cel = other.cast<PyCelValue&>();
+              if (self_is_error != other_cel.IsError()) {
+                return py::reinterpret_borrow<py::object>(Py_False);
+              }
+              PyObject* other_val = other_cel.Value();
+              if (other_val == nullptr) {
+                throw py::error_already_set();
+              }
+              other_obj = py::reinterpret_borrow<py::object>(other_val);
+            } else if (self_is_error) {
+              // Error values convert to str in Value(), so don't compare them
+              // directly against plain str. Returning Py_NotImplemented makes
+              // comparison with plain values False while still delegating to
+              // custom matchers (e.g. unittest.mock.ANY) via reflected __eq__.
+              return py::reinterpret_borrow<py::object>(Py_NotImplemented);
+            }
+            PyObject* self_val = self.Value();
+            if (self_val == nullptr) {
+              throw py::error_already_set();
+            }
+            py::object self_obj = py::reinterpret_borrow<py::object>(self_val);
+            if (PyBool_Check(self_obj.ptr()) != PyBool_Check(other_obj.ptr())) {
+              return py::reinterpret_borrow<py::object>(
+                  other_is_cel ? Py_False : Py_NotImplemented);
+            }
+            PyObject* res =
+                PyObject_RichCompare(self_obj.ptr(), other_obj.ptr(), Py_EQ);
+            if (res == nullptr) {
+              throw py::error_already_set();
+            }
+            return py::reinterpret_steal<py::object>(res);
+          },
+          py::is_operator())
       .def("__repr__", &PyCelValue::ToString);
 
   py::class_<PyCelListItemAccessor, PyCelValue>(m, "_CelListItemAccessor");
@@ -115,6 +155,8 @@ PyCelValue::~PyCelValue() {
 }
 
 PyCelType PyCelValue::Type() { return PyCelType::ForCelValue(cel_value_); }
+
+bool PyCelValue::IsError() { return cel_value_.IsError(); }
 
 PyObject* PyCelValue::Value() {
   ABSL_CHECK(PyGILState_Check());
@@ -208,6 +250,12 @@ PyCelType PyCelListItemAccessor::Type() {
   return PyCelType::ForCelValue(element_value_);
 }
 
+bool PyCelListItemAccessor::IsError() {
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
+  return element_value_.IsError();
+}
+
 PyObject* PyCelListItemAccessor::Value() {
   ABSL_CHECK(PyGILState_Check());
   FreeThreadingLockGuard lock(mutex_);
@@ -277,6 +325,12 @@ PyCelType PyCelMapItemAccessor::Type() {
   FreeThreadingLockGuard lock(mutex_);
   ResolveElementLocked();
   return PyCelType::ForCelValue(element_value_);
+}
+
+bool PyCelMapItemAccessor::IsError() {
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
+  return element_value_.IsError();
 }
 
 PyObject* PyCelMapItemAccessor::Value() {
