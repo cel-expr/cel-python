@@ -224,23 +224,29 @@ class CelParallelTest(absltest.TestCase):
       def read_values(_):
         # Concurrently access plain_value, value, type, and repr
         # on shared instances
+        self.assertEqual(val_scalar, n * 2)
         self.assertEqual(val_scalar.plain_value(), n * 2)
         self.assertEqual(val_scalar.value(), n * 2)
         self.assertEqual(val_scalar.type(), cel.Type.INT)
         self.assertNotEmpty(str(val_scalar))
 
+        self.assertEqual(val_list, [n, n + 1, n + 2])
         plain_list = val_list.plain_value()
         self.assertEqual(plain_list, [n, n + 1, n + 2])
         list_accessors = val_list.value()
+        self.assertEqual(list_accessors, [n, n + 1, n + 2])
         for idx, item in enumerate(list_accessors):
+          self.assertEqual(item, n + idx)
           self.assertEqual(item.plain_value(), n + idx)
           self.assertEqual(item.value(), n + idx)
           self.assertEqual(item.type(), cel.Type.INT)
           self.assertNotEmpty(str(item))
 
+        self.assertEqual(val_map, {"key": f"k_{n}", "value": n})
         plain_map = val_map.plain_value()
         self.assertEqual(plain_map, {"key": f"k_{n}", "value": n})
         map_accessors = val_map.value()
+        self.assertEqual(map_accessors, {"key": f"k_{n}", "value": n})
         self.assertEqual(map_accessors["key"].plain_value(), f"k_{n}")
         self.assertEqual(map_accessors["key"].value(), f"k_{n}")
         self.assertEqual(map_accessors["value"].plain_value(), n)

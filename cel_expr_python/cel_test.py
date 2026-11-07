@@ -108,10 +108,16 @@ class _CelTestBase(absltest.TestCase):
     self.assertIn(
         'No value with name "var_bool" found in Activation', res.value()
     )
+    self.assertEqual(res, self._eval("var_bool", {}))
+    self.assertNotEqual(res, res.value())
+    self.assertNotEqual(res.value(), res)
+    self.assertNotEqual(res, self._eval("var_str", {"var_str": res.value()}))
 
   def testEvalNull(self):
     res: cel.Value = self._eval("null", expected_return_type=cel.Type.NULL)
     self.assertEqual(res.type(), cel.Type.NULL)
+    self.assertEqual(res, None)  # pylint: disable=g-generic-assert
+    self.assertEqual(None, res)  # pylint: disable=g-generic-assert
     self.assertIsNone(res.value())
     self.assertIsNone(res.plain_value())
 
@@ -129,9 +135,17 @@ class _CelTestBase(absltest.TestCase):
   def testEvalBool(self):
     res: cel.Value = self._eval("true", expected_return_type=cel.Type.BOOL)
     self.assertEqual(res.type(), cel.Type.BOOL)
+    self.assertEqual(res, True)  # pylint: disable=g-generic-assert
+    self.assertEqual(True, res)  # pylint: disable=g-generic-assert
+    self.assertNotEqual(res, 1)
+    self.assertNotEqual(1, res)
+    self.assertNotEqual(res, self._eval("1"))
     self.assertEqual(res.value(), True)
     self.assertEqual(res.plain_value(), True)
     res = self._eval("false")
+    self.assertEqual(res, False)  # pylint: disable=g-generic-assert
+    self.assertNotEqual(res, 0)
+    self.assertNotEqual(self._eval("[false]"), [0])
     self.assertEqual(res.value(), False)
     res = self._eval("1 + 1 == 2")
     self.assertEqual(res.value(), True)
@@ -147,6 +161,10 @@ class _CelTestBase(absltest.TestCase):
   def testEvalInt64(self):
     res: cel.Value = self._eval("42", expected_return_type=cel.Type.INT)
     self.assertEqual(res.type(), cel.Type.INT)
+    self.assertEqual(res, 42)
+    self.assertEqual(42, res)
+    self.assertNotEqual(res, 43)
+    self.assertEqual(res, self._eval("40 + 2"))
     self.assertEqual(res.value(), 42)
     self.assertEqual(res.plain_value(), 42)
     res = self._eval("1000 + 200 + 30 + 4")
@@ -369,12 +387,45 @@ class _CelTestBase(absltest.TestCase):
         "[1, 'CEL', true]", expected_return_type=cel.Type.LIST
     )
     self.assertEqual(res.type(), cel.Type.LIST)
+    self.assertEqual(res, [1, "CEL", True])
+    self.assertEqual([1, "CEL", True], res)
+    self.assertNotEqual(res, [1, "CEL", False])
+    self.assertEqual(res.value(), [1, "CEL", True])
+    self.assertEqual([1, "CEL", True], res.value())
+    self.assertNotEqual(res.value(), [1, "CEL", False])
     self.assertEqual([item.value() for item in res.value()], [1, "CEL", True])
     self.assertEqual(res.plain_value(), [1, "CEL", True])
 
+    self.assertEqual(
+        self._eval("[[1, 2], [3]]"),
+        [[1, 2], [3]],
+    )
+    self.assertEqual(
+        self._eval("[[1, 2], [3]]").value(),
+        [[1, 2], [3]],
+    )
+    self.assertEqual(
+        self._eval("[1, 2]"),
+        self._eval("[1, 2]"),
+    )
+    self.assertEqual(
+        self._eval("[1, 2]").value(),
+        self._eval("[1, 2]").value(),
+    )
+    self.assertNotEqual(
+        self._eval("[1, 2]"),
+        self._eval("[1, 3]"),
+    )
+    self.assertNotEqual(
+        self._eval("[1, 2]").value(),
+        self._eval("[1, 3]").value(),
+    )
+
     res = self._eval("[1]", expected_return_type=cel.Type.List(cel.Type.INT))
     self.assertEqual(res.type(), cel.Type.LIST)
-    self.assertEqual(res.value()[0].value(), 1)
+    self.assertEqual(res, [1])
+    self.assertEqual(res.value(), [1])
+    self.assertEqual(res.value()[0], 1)
 
     res = self._eval(
         "["
@@ -406,6 +457,29 @@ class _CelTestBase(absltest.TestCase):
     self.assertEqual(res_list[1].type(), cel.Type.DOUBLE)
     self.assertAlmostEqual(res_list[1].value(), 3.14, places=3)
 
+    # An Any with an unknown type_url succeeds at field selection (producing a
+    # valid LIST of _CelListItemAccessors) and only fails when the element is
+    # lazily unpacked, exercising PyCelListItemAccessor::IsError() so error
+    # elements match identical errors but not plain str or STRING values.
+    bad_msg = test_all_types_pb.TestAllTypes()
+    bad_msg.repeated_any.add().type_url = (
+        "type.googleapis.com/nonexistent.Message"
+    )
+    bad_list_item = self._eval(
+        "var_msg.repeated_any", {"var_msg": bad_msg}
+    ).value()[0]
+    self.assertEqual(bad_list_item.type(), cel.Type.ERROR)
+    self.assertEqual(
+        bad_list_item,
+        self._eval("var_msg.repeated_any", {"var_msg": bad_msg}).value()[0],
+    )
+    self.assertNotEqual(bad_list_item, bad_list_item.value())
+    self.assertNotEqual(bad_list_item.value(), bad_list_item)
+    self.assertNotEqual(
+        bad_list_item,
+        self._eval("var_str", {"var_str": bad_list_item.value()}),
+    )
+
   def testEvalList_unexpectedType(self):
     res = self._eval("var_string_list", {"var_string_list": ["pi", 3.14]})
     self.assertEqual(res.type(), cel.Type.ERROR)
@@ -421,11 +495,25 @@ class _CelTestBase(absltest.TestCase):
         expected_return_type=cel.Type.Map(cel.Type.INT, cel.Type.STRING),
     )
     self.assertEqual(res.type(), cel.Type.MAP)
+    self.assertEqual(res, {777: "CEL", 42: "Python"})
+    self.assertEqual({777: "CEL", 42: "Python"}, res)
+    self.assertNotEqual(res, {777: "CEL", 42: "C++"})
     res_map = res.value()
     self.assertLen(res_map, 2)
-    self.assertEqual(res_map[777].value(), "CEL")
-    self.assertEqual(res_map[42].value(), "Python")
+    self.assertEqual(res_map, {777: "CEL", 42: "Python"})
+    self.assertEqual({777: "CEL", 42: "Python"}, res_map)
+    self.assertNotEqual(res_map, {777: "CEL", 42: "C++"})
+    self.assertEqual(res_map[777], "CEL")
+    self.assertEqual(res_map[42], "Python")
     self.assertEqual(res.plain_value(), {777: "CEL", 42: "Python"})
+    self.assertEqual(
+        self._eval("{'a': [1, 2]}"),
+        {"a": [1, 2]},
+    )
+    self.assertEqual(
+        self._eval("{'a': [1, 2]}").value(),
+        {"a": [1, 2]},
+    )
 
     res = self._eval(
         "var_int_map",
@@ -438,6 +526,29 @@ class _CelTestBase(absltest.TestCase):
     self.assertEqual(res_map[777].value(), "CEL")
     self.assertEqual(res_map[42].value(), "Python")
     self.assertEqual(res.plain_value(), {777: "CEL", 42: "Python"})
+
+    # An Any with an unknown type_url succeeds at field selection (producing a
+    # valid MAP whose entries are _CelMapItemAccessors) and only fails when the
+    # entry is lazily unpacked, exercising PyCelMapItemAccessor::IsError() so
+    # error entries match identical errors but not plain str or STRING values.
+    bad_msg = test_all_types_pb.TestAllTypes()
+    bad_msg.map_int64_any[1].type_url = (
+        "type.googleapis.com/nonexistent.Message"
+    )
+    bad_map_item = self._eval(
+        "var_msg.map_int64_any", {"var_msg": bad_msg}
+    ).value()[1]
+    self.assertEqual(bad_map_item.type(), cel.Type.ERROR)
+    self.assertEqual(
+        bad_map_item,
+        self._eval("var_msg.map_int64_any", {"var_msg": bad_msg}).value()[1],
+    )
+    self.assertNotEqual(bad_map_item, bad_map_item.value())
+    self.assertNotEqual(bad_map_item.value(), bad_map_item)
+    self.assertNotEqual(
+        bad_map_item,
+        self._eval("var_str", {"var_str": bad_map_item.value()}),
+    )
 
     res = self._eval(
         "var_string_map", {"var_string_map": {"CEL": True, "Python": 42}}
@@ -660,6 +771,9 @@ class _CelTestBase(absltest.TestCase):
         "type(1)", expected_return_type=cel.Type.Type(cel.Type.INT)
     )
     self.assertEqual(res.type(), cel.Type.TYPE)
+    self.assertEqual(res, cel.Type.INT)
+    self.assertEqual(cel.Type.INT, res)
+    self.assertNotEqual(res, 1)
     self.assertEqual(res.value(), cel.Type.INT)
 
     res = self._eval(

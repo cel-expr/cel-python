@@ -58,6 +58,9 @@ class PyCelValue {
   virtual ~PyCelValue();
 
   virtual PyCelType Type();
+  // Returns true if this value (lazily resolved for container item accessors)
+  // represents a cel::ErrorValue.
+  virtual bool IsError();
   virtual PyObject* Value();
   virtual PyObject* PlainValue();
   virtual std::string ToString();
@@ -89,6 +92,7 @@ class PyCelListItemAccessor : public PyCelValue {
   ~PyCelListItemAccessor() override = default;
 
   PyCelType Type() override;
+  bool IsError() override;
   PyObject* Value() override;
   PyObject* PlainValue() override;
   std::string ToString() override;
@@ -116,6 +120,7 @@ class PyCelMapItemAccessor : public PyCelValue {
   ~PyCelMapItemAccessor() override = default;
 
   PyCelType Type() override;
+  bool IsError() override;
   PyObject* Value() override;
   PyObject* PlainValue() override;
   std::string ToString() override;

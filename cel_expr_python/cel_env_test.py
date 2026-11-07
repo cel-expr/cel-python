@@ -501,8 +501,13 @@ class CelEnvTest(absltest.TestCase):
       """)
     env: cel.Env = cel.NewEnv(config=config)
 
-    # Test lists extension (e.g., reverse)
+    # Test lists extension (e.g., range and reverse)
+    expr = env.compile("lists.range(3)")
+    self.assertEqual(expr.eval(), [0, 1, 2])
+    self.assertEqual(expr.eval().value(), [0, 1, 2])
     res = env.compile("[1, 2].reverse()").eval()
+    self.assertEqual(res, [2, 1])
+    self.assertEqual(res.value(), [2, 1])
     self.assertEqual(res.plain_value(), [2, 1])
 
     # Test sets extension (e.g., intersects)
