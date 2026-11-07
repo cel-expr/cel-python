@@ -22,12 +22,12 @@ import textwrap
 from typing import Any
 
 from absl.testing import absltest
+from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 from cel_expr_python import cel
 from cel_expr_python.ext import ext_bindings
 from cel_expr_python.ext import ext_math
 from cel_expr_python.ext import ext_optional
 from cel_expr_python.ext import ext_strings
-from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 
 
 class CelEnvTest(absltest.TestCase):
