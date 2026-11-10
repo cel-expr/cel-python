@@ -435,7 +435,6 @@ class CelEnvTest(absltest.TestCase):
           extensions:
             - name: "bindings"
             - name: "math"
-              version: 0
             - name: "optional"
               version: 1
             - name: "strings"
@@ -469,7 +468,9 @@ class CelEnvTest(absltest.TestCase):
     config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       extensions:
         - name: math
+          version: latest
         - name: strings
+          version: latest
       """)
     env: cel.Env = cel.NewEnv(
         config=config,
@@ -481,7 +482,9 @@ class CelEnvTest(absltest.TestCase):
         normalize_yaml("""
           extensions:
             - name: "math"
+              version: latest
             - name: "strings"
+              version: latest
             - name: "test_cel_extension"
         """),
     )
@@ -494,6 +497,7 @@ class CelEnvTest(absltest.TestCase):
     config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
       extensions:
         - name: lists
+          version: latest
         - name: sets
         - name: two-var-comprehensions
         - name: optional
