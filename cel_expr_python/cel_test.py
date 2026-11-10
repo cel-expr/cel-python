@@ -23,15 +23,20 @@ from typing import Any
 
 from google.protobuf import message_factory
 
+from cel.expr import checked_pb2 as checked_pb
+from google.protobuf import any_pb2 as any_pb
 from google.protobuf import duration_pb2 as duration_pb
 from google.protobuf import timestamp_pb2 as timestamp_pb
 from absl.testing import absltest
+from absl.testing import parameterized
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 from cel_expr_python import cel
+from cel_expr_python import leak_check
 
 
+@leak_check.leak_checked
 @absltest.skipThisClass("Base class")
-class _CelTestBase(absltest.TestCase):
+class _CelTestBase(parameterized.TestCase):
   options: cel.Options = cel.Options()
 
   def setUp(self):
@@ -57,7 +62,6 @@ class _CelTestBase(absltest.TestCase):
         },
         options=self.options,
     )
-    self.object_counts_before_test = self._grab_object_counts()
 
   def tearDown(self):
     """Tears down the test environment."""
@@ -66,26 +70,6 @@ class _CelTestBase(absltest.TestCase):
     gc.collect()
     # Assert that all Arenas have been garbage-collected
     self.assertEqual(cel._InternalArena._get_instance_count(), 0)
-    self._check_for_leaks()
-
-  def _grab_object_counts(self) -> dict[str, int]:
-    gc.collect()
-    all_objects = gc.get_objects()
-    type_counts = {}
-    for obj in all_objects:
-      obj_type = type(obj)
-      type_counts[obj_type.__name__] = type_counts.get(obj_type, 0) + 1
-    return type_counts
-
-  def _check_for_leaks(self):
-    type_counts = self._grab_object_counts()
-    for key, count in type_counts.items():
-      if count != self.object_counts_before_test.get(key, 0):
-        self.fail(
-            f"Object count for {key} did not match expected count. "
-            f"Expected: {self.object_counts_before_test.get(key, 0)}, "
-            f"Actual: {count}",
-        )
 
   def _eval(
       self,
@@ -364,7 +348,46 @@ class _CelTestBase(absltest.TestCase):
         r" .*. \(Expected cel.expr.conformance.proto2.TestAllTypes\)",
     )
 
-  def testProto_cannotFindMessageClass(self):
+  @parameterized.named_parameters(
+      ("message", "TestAllTypes{single_string: 'hello'}", True),
+      ("list", "[TestAllTypes{single_string: 'hello'}]", True),
+      ("nested_list", "[[1, 2], TestAllTypes{single_string: 'hello'}]", True),
+      ("map_value", "{'k': TestAllTypes{single_string: 'hello'}}", True),
+      (
+          "nested_map_value",
+          (
+              "{'a': [1, 2], 'b': [3, 4], 'z':"
+              " TestAllTypes{single_string: 'hello'}}"
+          ),
+          True,
+      ),
+      ("call_message", "show(TestAllTypes{single_string: 'hello'})", False),
+      ("call_list", "show([TestAllTypes{single_string: 'hello'}])", False),
+      (
+          "call_nested_list",
+          "show([[1, 2], TestAllTypes{single_string: 'hello'}])",
+          False,
+      ),
+      (
+          "call_map_value",
+          "show({'k': TestAllTypes{single_string: 'hello'}})",
+          False,
+      ),
+      (
+          "call_nested_map_value",
+          (
+              "show({'a': [1, 2], 'b': [3, 4], 'z':"
+              " TestAllTypes{single_string: 'hello'}})"
+          ),
+          False,
+      ),
+      (
+          "call_second_arg",
+          "show([1, 2], TestAllTypes{single_string: 'hello'})",
+          False,
+      ),
+  )
+  def testProto_cannotFindMessageClass(self, expr: str, expect_exception: bool):
     orig_get_message_class = message_factory.GetMessageClass
 
     def failing_get_message_class(descriptor):
@@ -375,20 +398,109 @@ class _CelTestBase(absltest.TestCase):
 
     try:
       message_factory.GetMessageClass = failing_get_message_class
-      env = cel.NewEnv(options=self.options)
-      expr = env.compile(
-          "cel.expr.conformance.proto2.TestAllTypes{single_string: 'hello'}"
+      called = []
+
+      def show(x):
+        called.append(x)
+        return "ok"
+
+      def show_pair(a, b):
+        called.append((a, b))
+        return "ok"
+
+      ext = cel.CelExtension(
+          "show_ext",
+          functions=[
+              cel.FunctionDecl(
+                  "show",
+                  [
+                      cel.Overload(
+                          "show_any", cel.Type.STRING, [cel.Type.DYN], impl=show
+                      ),
+                      cel.Overload(
+                          "show_pair",
+                          cel.Type.STRING,
+                          [cel.Type.DYN, cel.Type.DYN],
+                          impl=show_pair,
+                      ),
+                  ],
+              )
+          ],
       )
-      res = expr.eval(env.Activation())
-      with self.assertRaisesRegex(
-          TypeError, "Couldn't find message class for type"
-      ):
-        res.plain_value()
-      del res
-      del expr
-      del env
+      env = cel.NewEnv(
+          extensions=[ext],
+          options=self.options,
+          container="cel.expr.conformance.proto2",
+      )
+      res = env.compile(expr).eval(env.Activation())
+      if expect_exception:
+        with self.assertRaisesRegex(
+            TypeError, "Couldn't find message class for type"
+        ):
+          res.plain_value()
+      else:
+        # During evaluation of the function argument, the proto type will
+        # fail to resolve to a message class, and the error will be
+        # wrapped in an ERROR type. The function itself will not be called.
+        self.assertEqual(res.type(), cel.Type.ERROR)
+        self.assertIn("Couldn't find message class for type", res.value())
+      self.assertEqual(called, [])
     finally:
       message_factory.GetMessageClass = orig_get_message_class
+
+  def testCustomFunction_raisesException(self):
+    def fail(x):
+      raise ValueError(f"bad value: {x}")
+
+    ext = cel.CelExtension(
+        "fail_ext",
+        functions=[
+            cel.FunctionDecl(
+                "fail",
+                [
+                    cel.Overload(
+                        "fail_int", cel.Type.STRING, [cel.Type.INT], impl=fail
+                    )
+                ],
+            )
+        ],
+    )
+    env = cel.NewEnv(extensions=[ext], options=self.options)
+    res = env.compile("fail(42)").eval(env.Activation())
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn("bad value: 42", res.value())
+
+  def testCustomFunction_invalidReturnWithBrokenRepr(self):
+    class BrokenReprCallable:
+
+      def __call__(self, x):
+        del x
+        return "not_an_int"
+
+      def __repr__(self):
+        raise RuntimeError("repr failed")
+
+    env = cel.NewEnv(
+        functions=[
+            cel.FunctionDecl(
+                "broken_repr",
+                [
+                    cel.Overload(
+                        "broken_repr_int",
+                        cel.Type.INT,
+                        [cel.Type.INT],
+                        impl=BrokenReprCallable(),
+                    )
+                ],
+            )
+        ],
+        options=self.options,
+    )
+    res = env.compile("broken_repr(1)").eval()
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn(
+        "Unexpected value type for 'Python function '<unknown>''", res.value()
+    )
 
   def testEvalList(self):
     res: cel.Value = self._eval(
@@ -742,6 +854,17 @@ class _CelTestBase(absltest.TestCase):
         {"value": b"foo", "type": cel.Type.BYTES},
         {"value": bytearray("bar", "ascii"), "type": cel.Type.BYTES},
         {
+            "value": datetime.datetime(
+                2025, 1, 1, tzinfo=datetime.timezone.utc
+            ),
+            "type": cel.Type.TIMESTAMP,
+        },
+        {
+            "value": datetime.timedelta(seconds=15),
+            "type": cel.Type.DURATION,
+        },
+        {"value": cel.Type.INT, "type": cel.Type.TYPE},
+        {
             "value": msg,
             "type": cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
         },
@@ -891,6 +1014,69 @@ class _CelTestBase(absltest.TestCase):
         cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
         cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
     )
+    self.assertTrue(cel.Type.DYN.is_assignable_from(cel.Type.INT))
+    self.assertTrue(
+        cel.Type.LIST.is_assignable_from(cel.Type.List(cel.Type.INT))
+    )
+    self.assertFalse(cel.Type.INT.is_assignable_from(cel.Type.DYN))
+    self.assertTrue(cel.Type("~T").is_assignable_from(cel.Type("~T")))
+    self.assertFalse(cel.Type("~T").is_assignable_from(cel.Type("~U")))
+    self.assertFalse(
+        cel.Type.TYPE.is_assignable_from(
+            cel.Type.AbstractType("optional_type", [cel.Type.INT])
+        )
+    )
+    self.assertTrue(
+        cel.Type.AbstractType(
+            "optional_type", [cel.Type.INT]
+        ).is_assignable_from(
+            cel.Type.AbstractType("optional_type", [cel.Type.INT])
+        )
+    )
+    self.assertFalse(
+        cel.Type.AbstractType(
+            "optional_type", [cel.Type.INT]
+        ).is_assignable_from(
+            cel.Type.AbstractType("optional_type", [cel.Type.STRING])
+        )
+    )
+    self.assertFalse(
+        cel.Type.AbstractType(
+            "optional_type", [cel.Type.INT]
+        ).is_assignable_from(
+            cel.Type.AbstractType("other_type", [cel.Type.INT])
+        )
+    )
+
+    box_int = cel.Type.AbstractType("my_box", [cel.Type.INT])
+    box_dyn = cel.Type.AbstractType("my_box", [cel.Type.DYN])
+    other_box_int = cel.Type.AbstractType("other_box", [cel.Type.INT])
+    self.assertEqual(cel.Type("my_box<int>"), box_int)
+    self.assertEqual(box_int.name(), "my_box<INT>")
+    self.assertTrue(box_dyn.is_assignable_from(box_int))
+    self.assertTrue(box_int.is_assignable_from(box_int))
+    self.assertFalse(other_box_int.is_assignable_from(box_int))
+    self.assertTrue(cel.Type.AbstractType("my_box").is_assignable_from(box_int))
+    self.assertFalse(
+        box_int.is_assignable_from(cel.Type.AbstractType("my_box"))
+    )
+    self.assertFalse(
+        box_int.is_assignable_from(
+            cel.Type.AbstractType("my_box", [cel.Type.INT, cel.Type.STRING])
+        )
+    )
+    self.assertEqual(cel.Type("google.protobuf.Timestamp"), cel.Type.TIMESTAMP)
+    self.assertEqual(cel.Type("google.protobuf.Duration"), cel.Type.DURATION)
+
+  def testCheckedExprTypeParamReturnType(self):
+    checked_expr = checked_pb.CheckedExpr()
+    checked_expr.expr.id = 1
+    checked_expr.expr.ident_expr.name = "var_tp"
+    checked_expr.type_map[1].type_param = "T"
+    packed = any_pb.Any()
+    packed.Pack(checked_expr)
+    expr: cel.Expression = self.env.deserialize(packed.SerializeToString())
+    self.assertEqual(expr.return_type(), cel.Type("~T"))
 
   def testCelExpressionPersistence_checkedExpr(self):
     expr: cel.Expression = self.env.compile("var_msg.single_string")
@@ -1061,6 +1247,19 @@ class _CelTestBase(absltest.TestCase):
     expr = bad_env.compile("var_proto", disable_check=True)
     msg = test_all_types_pb.TestAllTypes(single_string="Hey")
     res = expr.eval(data={"var_proto": msg})
+    self.assertEqual(res.type(), cel.Type.ERROR)
+    self.assertIn("Custom pool error", str(res.value()))
+
+  def testTypeToCelValueError(self):
+    bad_env = cel.NewEnv(
+        _RaisingDescriptorPool(),
+        variables={"var_type": cel.Type.TYPE},
+        options=self.options,
+    )
+    expr = bad_env.compile("var_type", disable_check=True)
+    res = expr.eval(
+        data={"var_type": cel.Type("cel.expr.conformance.proto2.TestSomeTypes")}
+    )
     self.assertEqual(res.type(), cel.Type.ERROR)
     self.assertIn("Custom pool error", str(res.value()))
 
