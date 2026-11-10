@@ -25,6 +25,7 @@ from typing import Any
 from absl.testing import absltest
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 from cel_expr_python import cel
+from cel_expr_python import leak_check
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,6 +95,7 @@ _TEST_CASES = [
 ]
 
 
+@leak_check.leak_checked
 class CelParallelTest(absltest.TestCase):
 
   def setUp(self):
@@ -119,7 +121,6 @@ class CelParallelTest(absltest.TestCase):
             )
         ],
     )
-    self.object_counts_before_test = self._grab_object_counts()
 
   def tearDown(self):
     """Tears down the test environment."""
@@ -128,26 +129,6 @@ class CelParallelTest(absltest.TestCase):
     gc.collect()
     # Assert that all Arenas have been garbage-collected
     self.assertEqual(cel._InternalArena._get_instance_count(), 0)
-    self._check_for_leaks()
-
-  def _grab_object_counts(self) -> dict[str, int]:
-    gc.collect()
-    all_objects = gc.get_objects()
-    type_counts = {}
-    for obj in all_objects:
-      obj_type = type(obj)
-      type_counts[obj_type.__name__] = type_counts.get(obj_type, 0) + 1
-    return type_counts
-
-  def _check_for_leaks(self):
-    type_counts = self._grab_object_counts()
-    for key, count in type_counts.items():
-      if count != self.object_counts_before_test.get(key, 0):
-        self.fail(
-            f"Object count for {key} did not match expected count. "
-            f"Expected: {self.object_counts_before_test.get(key, 0)}, "
-            f"Actual: {count}",
-        )
 
   def _test_eval(self, multi_threaded: bool):
     compiled_exprs = [self.env.compile(tc.expr) for tc in _TEST_CASES]

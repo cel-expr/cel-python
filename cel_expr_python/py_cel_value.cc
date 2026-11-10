@@ -55,6 +55,24 @@ namespace cel_python {
 
 namespace py = ::pybind11;
 
+namespace {
+
+std::string PyObjectRepr(PyObject* obj) {
+  if (obj == nullptr) {
+    return "<null>";
+  }
+  PyObject* repr = PyObject_Repr(obj);
+  const char* repr_cstr = repr != nullptr ? PyUnicode_AsUTF8(repr) : nullptr;
+  if (repr_cstr == nullptr) {
+    PyErr_Clear();
+  }
+  std::string repr_str = repr_cstr != nullptr ? repr_cstr : "<unknown>";
+  Py_XDECREF(repr);
+  return repr_str;
+}
+
+}  // namespace
+
 void PyCelValue::DefinePythonBindings(py::module& m) {
   py::class_<PyCelValue>(m, "Value")
       .def("type", &PyCelValue::Type)
@@ -461,8 +479,11 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
       cel::ListValue list = *cel_value.AsList();
       Py_ssize_t size = *list.Size();
       PyObject* py_list = PyList_New(size);
+      if (py_list == nullptr) {
+        return nullptr;
+      }
       absl::Status status = absl::OkStatus();
-      for (int i = 0; i < size; ++i) {
+      for (Py_ssize_t i = 0; i < size; ++i) {
         PyObject* py_item;
         if (plain_value) {
           absl::StatusOr<cel::Value> item =
@@ -478,6 +499,10 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
           py_item = py::cast(PyCelListItemAccessor(cel_value, i, arena, env))
                         .release()
                         .ptr();
+        }
+        if (py_item == nullptr) {
+          Py_DECREF(py_list);
+          return nullptr;
         }
         // PyList_SetItem is special in that it "steals" the reference to the
         // item being set, so we must not decref it.
@@ -505,12 +530,16 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
       }
 
       PyObject* py_map = PyDict_New();
+      if (py_map == nullptr) {
+        return nullptr;
+      }
       Py_ssize_t size = *key_list.Size();
-      for (int i = 0; i < size; ++i) {
+      for (Py_ssize_t i = 0; i < size; ++i) {
         absl::StatusOr<cel::Value> key =
             key_list.Get(i, env->GetDescriptorPool(), env->GetMessageFactory(),
                          arena->GetArena());
         if (!key.ok()) {
+          Py_DECREF(py_map);
           PyErr_Format(PyExc_RuntimeError, "Cannot get key: %s",
                        key.status().ToString().c_str());
           return nullptr;
@@ -518,6 +547,10 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
 
         PyObject* py_key = CelValueToPyObject(*key, env, arena,
                                               /*plain_value=*/true);
+        if (py_key == nullptr) {
+          Py_DECREF(py_map);
+          return nullptr;
+        }
         PyObject* py_value;
         if (plain_value) {
           cel::Value element_value;
@@ -525,9 +558,10 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
               map.Get(*key, env->GetDescriptorPool(), env->GetMessageFactory(),
                       arena->GetArena(), &element_value);
           if (!status.ok()) {
+            Py_DECREF(py_key);
+            Py_DECREF(py_map);
             PyErr_Format(PyExc_RuntimeError, "Cannot get value: %s",
                          status.ToString().c_str());
-            Py_DECREF(py_key);
             return nullptr;
           }
           py_value = CelValueToPyObject(element_value, env, arena,
@@ -537,12 +571,21 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
                          .release()
                          .ptr();
         }
+        if (py_value == nullptr) {
+          Py_DECREF(py_key);
+          Py_DECREF(py_map);
+          return nullptr;
+        }
         // In contrast to PyList_SetItem, PyDict_SetItem does not "steal" the
         // reference to the key and value being set, so we must decref them.
         // https://docs.python.org/3/c-api/dict.html#:~:text=int-,pydict_setitem
-        PyDict_SetItem(py_map, py_key, py_value);
+        int set_status = PyDict_SetItem(py_map, py_key, py_value);
         Py_DECREF(py_key);
         Py_DECREF(py_value);
+        if (set_status < 0) {
+          Py_DECREF(py_map);
+          return nullptr;
+        }
       }
       return py_map;
     }
@@ -767,9 +810,9 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           time = py::cast<absl::Time>(py_object);
         } catch (const py::cast_error& e) {
           PyErr_Clear();
-          return absl::UnknownError(absl::StrFormat(
-              "Cannot convert %s to absl::Time: %s",
-              PyUnicode_AsUTF8(PyObject_Repr(py_object)), e.what()));
+          return absl::UnknownError(
+              absl::StrFormat("Cannot convert %s to absl::Time: %s",
+                              PyObjectRepr(py_object), e.what()));
         }
         absl::StatusOr<cel::TimestampValue> timestamp_value =
             cel::SafeTimestampValue(time);
@@ -808,7 +851,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           PyErr_Clear();
           return absl::UnknownError(
               absl::StrFormat("Cannot convert %s to cel.Type.TIMESTAMP",
-                              PyUnicode_AsUTF8(PyObject_Repr(py_object))));
+                              PyObjectRepr(py_object)));
         }
         absl::Time time =
             absl::FromUnixSeconds(seconds) + absl::Nanoseconds(nanos);
@@ -830,9 +873,9 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           duration = py::cast<absl::Duration>(py_object);
         } catch (const py::cast_error& e) {
           PyErr_Clear();
-          return absl::UnknownError(absl::StrFormat(
-              "Cannot convert %s to absl::Duration: %s",
-              PyUnicode_AsUTF8(PyObject_Repr(py_object)), e.what()));
+          return absl::UnknownError(
+              absl::StrFormat("Cannot convert %s to absl::Duration: %s",
+                              PyObjectRepr(py_object), e.what()));
         }
         absl::StatusOr<cel::DurationValue> duration_value =
             cel::SafeDurationValue(duration);
@@ -869,9 +912,8 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         Py_XDECREF(py_nanos);
         if (!ok) {
           PyErr_Clear();
-          return absl::UnknownError(
-              absl::StrFormat("Cannot convert %s to absl::Duration",
-                              PyUnicode_AsUTF8(PyObject_Repr(py_object))));
+          return absl::UnknownError(absl::StrFormat(
+              "Cannot convert %s to absl::Duration", PyObjectRepr(py_object)));
         }
         absl::Duration duration =
             absl::Seconds(seconds) + absl::Nanoseconds(nanos);
@@ -953,28 +995,26 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         while (PyDict_Next(py_object, &pos, &key, &value)) {
           // Note: PyDict_Next returns borrowed references, so we shouldn't
           // DECREF them.
-          CEL_PYTHON_ASSIGN_OR_RETURN(
-              cel::Value converted_key,
-              PyObjectToCelValue(
-                  key, key_type,
-                  [context, key]() {
-                    return absl::StrFormat(
-                        "%s[%s]", context(),
-                        PyUnicode_AsUTF8(PyObject_Repr(key)));
-                  },
-                  env, arena));
+          CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_key,
+                                      PyObjectToCelValue(
+                                          key, key_type,
+                                          [context, key]() {
+                                            return absl::StrFormat(
+                                                "%s[%s]", context(),
+                                                PyObjectRepr(key));
+                                          },
+                                          env, arena));
 
-          CEL_PYTHON_ASSIGN_OR_RETURN(
-              cel::Value converted_value,
-              PyObjectToCelValue(
-                  value, value_type,
-                  [context, key, value]() {
-                    return absl::StrFormat(
-                        "%s[%s] -> %s", context(),
-                        PyUnicode_AsUTF8(PyObject_Repr(key)),
-                        PyUnicode_AsUTF8(PyObject_Repr(value)));
-                  },
-                  env, arena));
+          CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_value,
+                                      PyObjectToCelValue(
+                                          value, value_type,
+                                          [context, key, value]() {
+                                            return absl::StrFormat(
+                                                "%s[%s] -> %s", context(),
+                                                PyObjectRepr(key),
+                                                PyObjectRepr(value));
+                                          },
+                                          env, arena));
           CEL_PYTHON_RETURN_IF_ERROR(
               builder->Put(converted_key, converted_value));
         }
