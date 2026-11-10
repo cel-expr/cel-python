@@ -108,6 +108,23 @@ Result type: BOOL
 Result value: True
 ```
 
+#### Comparing values
+
+*   `==`: Compares `.value()` using Python equality (except `ERROR` values only
+    match equal `ERROR` values).
+*   `equals(other)`: Compares two `cel.Value` instances using CEL equality
+    (`bool != int`, cross-numeric comparisons, CEL proto equality including
+    `Any` unpacking, and `ERROR` returning `False`).
+
+```python
+cel_bool = cel_env.compile("true").eval()
+cel_int = cel_env.compile("1").eval()
+
+cel_bool == 1                  # True (Python semantics)
+cel_bool == cel_int            # True (Python semantics)
+cel_bool.equals(cel_int)       # False (CEL semantics)
+```
+
 ### Using an Activation
 
 The `eval()` function can also be invoked with an `Activation` object that

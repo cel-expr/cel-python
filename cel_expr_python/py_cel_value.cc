@@ -74,6 +74,12 @@ void PyCelValue::DefinePythonBindings(py::module& m) {
              }
              return py::reinterpret_borrow<py::object>(obj);
            })
+      .def(
+          "__eq__", &PyCelValue::Eq, py::is_operator(),
+          R"doc(Compares using Python equality on `.value()`, keeping ERROR values distinct from non-ERROR values.)doc")
+      .def(
+          "equals", &PyCelValue::Equals, py::arg("other"),
+          R"doc(Compares two `Value` instances using CEL equality semantics (e.g., cross-numeric comparisons, `bool != int`, and CEL proto message equality; `ERROR` values compare unequal).)doc")
       .def("__repr__", &PyCelValue::ToString);
 
   py::class_<PyCelListItemAccessor, PyCelValue>(m, "_CelListItemAccessor");
@@ -116,6 +122,8 @@ PyCelValue::~PyCelValue() {
 
 PyCelType PyCelValue::Type() { return PyCelType::ForCelValue(cel_value_); }
 
+bool PyCelValue::IsError() { return cel_value_.IsError(); }
+
 PyObject* PyCelValue::Value() {
   ABSL_CHECK(PyGILState_Check());
   FreeThreadingLockGuard lock(mutex_);
@@ -144,6 +152,66 @@ PyObject* PyCelValue::PlainValue() {
   }
 
   return plain_object_;
+}
+
+cel::Value PyCelValue::GetCelValue() { return cel_value_; }
+
+// Python equality (`==`) compares converted `.value()` objects using Python's
+// `__eq__` rules (so e.g. `bool` compares equal to `int`, large `int` vs
+// `float` uses exact Python comparison, and protos use Python
+// `Message.__eq__`), except that `ERROR` values only compare equal to `ERROR`
+// values with matching messages and return `NotImplemented` against plain
+// Python objects. Use `Equals()` for CEL in-language equality. Note: `Value()`
+// (rather than `PlainValue()`) is used so container elements remain wrapped and
+// preserve `ERROR` handling recursively.
+py::object PyCelValue::Eq(py::handle other) {
+  ABSL_CHECK(PyGILState_Check());
+  bool self_is_error = IsError();
+  PyObject* other_val = other.ptr();
+  if (py::isinstance<PyCelValue>(other)) {
+    PyCelValue& other_cel = other.cast<PyCelValue&>();
+    if (self_is_error != other_cel.IsError()) {
+      return py::reinterpret_borrow<py::object>(Py_False);
+    }
+    other_val = other_cel.Value();
+    if (other_val == nullptr) {
+      throw py::error_already_set();
+    }
+  } else if (self_is_error) {
+    // Error values convert to str in Value(), so don't compare them directly
+    // against plain str. Returning Py_NotImplemented makes comparison with
+    // plain values False while still delegating to custom matchers (e.g.
+    // unittest.mock.ANY) via reflected __eq__.
+    return py::reinterpret_borrow<py::object>(Py_NotImplemented);
+  }
+  PyObject* self_val = Value();
+  if (self_val == nullptr) {
+    throw py::error_already_set();
+  }
+  PyObject* res = PyObject_RichCompare(self_val, other_val, Py_EQ);
+  if (res == nullptr) {
+    throw py::error_already_set();
+  }
+  return py::reinterpret_steal<py::object>(res);
+}
+
+bool PyCelValue::Equals(PyCelValue& other) {
+  absl::Status status;
+  cel::Value result;
+  {
+    // Release the GIL before calling into C++ DescriptorPool / MessageFactory
+    // (e.g., when resolving lazy container items or unpacking Any messages)
+    // to maintain the lock hierarchy (DescriptorPool Mutex -> Python GIL).
+    py::gil_scoped_release gil_release;
+    cel::Value lhs = GetCelValue();
+    cel::Value rhs = other.GetCelValue();
+    google::protobuf::Arena temp_arena;
+    status = lhs.Equal(rhs, env_->GetDescriptorPool(),
+                       env_->GetMessageFactory(), &temp_arena, &result);
+  }
+  ThrowIfError(PyErr_toStatus());
+  ThrowIfError(status);
+  return result.IsTrue();
 }
 
 std::string PyCelValue::ToString() { return cel_value_.DebugString(); }
@@ -208,6 +276,12 @@ PyCelType PyCelListItemAccessor::Type() {
   return PyCelType::ForCelValue(element_value_);
 }
 
+bool PyCelListItemAccessor::IsError() {
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
+  return element_value_.IsError();
+}
+
 PyObject* PyCelListItemAccessor::Value() {
   ABSL_CHECK(PyGILState_Check());
   FreeThreadingLockGuard lock(mutex_);
@@ -240,6 +314,12 @@ PyObject* PyCelListItemAccessor::PlainValue() {
     PyErr_SetString(PyExc_AssertionError, "Cannot create object");
   }
   return plain_object_;
+}
+
+cel::Value PyCelListItemAccessor::GetCelValue() {
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
+  return element_value_;
 }
 
 std::string PyCelListItemAccessor::ToString() {
@@ -279,6 +359,12 @@ PyCelType PyCelMapItemAccessor::Type() {
   return PyCelType::ForCelValue(element_value_);
 }
 
+bool PyCelMapItemAccessor::IsError() {
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
+  return element_value_.IsError();
+}
+
 PyObject* PyCelMapItemAccessor::Value() {
   ABSL_CHECK(PyGILState_Check());
   FreeThreadingLockGuard lock(mutex_);
@@ -311,6 +397,12 @@ PyObject* PyCelMapItemAccessor::PlainValue() {
     PyErr_SetString(PyExc_AssertionError, "Cannot create object");
   }
   return plain_object_;
+}
+
+cel::Value PyCelMapItemAccessor::GetCelValue() {
+  FreeThreadingLockGuard lock(mutex_);
+  ResolveElementLocked();
+  return element_value_;
 }
 
 std::string PyCelMapItemAccessor::ToString() {

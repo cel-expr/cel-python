@@ -58,8 +58,16 @@ class PyCelValue {
   virtual ~PyCelValue();
 
   virtual PyCelType Type();
+  // Returns true if this value represents a cel::ErrorValue.
+  virtual bool IsError();
   virtual PyObject* Value();
   virtual PyObject* PlainValue();
+  // Compares using Python equality on `.value()`, keeping ERROR values distinct
+  // from non-ERROR values.
+  pybind11::object Eq(pybind11::handle other);
+  // Compares two cel::Values using CEL's in-language equality semantics
+  // (e.g., cross-numeric comparisons, bool != int, proto MessageEquals).
+  bool Equals(PyCelValue& other);
   virtual std::string ToString();
 
   static cel::Value ToCelValue(PyObject* object,
@@ -67,6 +75,8 @@ class PyCelValue {
                                PyMessageFactory* py_message_factory);
 
  protected:
+  virtual cel::Value GetCelValue();
+
   mutable FreeThreadingMutex mutex_;
   cel::Value cel_value_;
   PyObject* object_ ABSL_GUARDED_BY(mutex_);
@@ -89,9 +99,13 @@ class PyCelListItemAccessor : public PyCelValue {
   ~PyCelListItemAccessor() override = default;
 
   PyCelType Type() override;
+  bool IsError() override;
   PyObject* Value() override;
   PyObject* PlainValue() override;
   std::string ToString() override;
+
+ protected:
+  cel::Value GetCelValue() override;
 
  private:
   void ResolveElementLocked() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -116,9 +130,13 @@ class PyCelMapItemAccessor : public PyCelValue {
   ~PyCelMapItemAccessor() override = default;
 
   PyCelType Type() override;
+  bool IsError() override;
   PyObject* Value() override;
   PyObject* PlainValue() override;
   std::string ToString() override;
+
+ protected:
+  cel::Value GetCelValue() override;
 
  private:
   void ResolveElementLocked() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);

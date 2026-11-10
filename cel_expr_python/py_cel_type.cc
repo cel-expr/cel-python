@@ -65,7 +65,7 @@ void PyCelType::DefinePythonBindings(py::module& m) {
       .def("is_message", &PyCelType::IsMessage)
       .def("is_assignable_from", &PyCelType::IsAssignableFrom)
       .def("__repr__", &PyCelType::ToString)
-      .def("__eq__", &PyCelType::operator==);
+      .def("__eq__", &PyCelType::operator==, py::is_operator());
 
   type.def_static("List", &PyCelType::ListType, py::arg("element_type"))
       .def_static("Map", &PyCelType::MapType, py::arg("key_type"),
