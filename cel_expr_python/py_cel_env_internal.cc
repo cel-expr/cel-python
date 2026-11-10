@@ -176,9 +176,7 @@ PyCelEnvInternal::NewCelEnvInternal(
       name = extension->name();
     }
     CEL_PYTHON_RETURN_IF_ERROR(config.AddExtensionConfig(
-        name, extension->version() >= 0
-                  ? extension->version()
-                  : cel::Config::ExtensionConfig::kLatest));
+        name, extension->version() >= 0 ? extension->version() : 0));
     extension_handles.push_back(std::move(handle));
   }
 
