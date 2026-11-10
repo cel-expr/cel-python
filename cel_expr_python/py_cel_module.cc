@@ -19,6 +19,7 @@
 #include "cel_expr_python/py_cel_expression.h"
 #include "cel_expr_python/py_cel_function.h"
 #include "cel_expr_python/py_cel_function_decl.h"
+#include "cel_expr_python/py_cel_optional.h"
 #include "cel_expr_python/py_cel_options.h"
 #include "cel_expr_python/py_cel_overload.h"
 #include "cel_expr_python/py_cel_python_extension.h"
@@ -35,6 +36,7 @@ PYBIND11_MODULE(cel, m, pybind11::mod_gil_not_used()) {
 
   PyCelArena::DefinePythonBindings(m);
   PyCelType::DefinePythonBindings(m);
+  PyCelOptional::DefinePythonBindings(m);
   PyCelValue::DefinePythonBindings(m);
   PyCelActivation::DefinePythonBindings(m);
   PyCelExpression::DefinePythonBindings(m);

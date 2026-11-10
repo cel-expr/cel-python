@@ -18,10 +18,12 @@ This module contains tests for the `cel.EnvConfig` class, focusing on its
 ability to be created from and serialized to YAML format.
 """
 
+import datetime
 import textwrap
 from typing import Any
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 from cel_expr_python import cel
 from cel_expr_python.ext import ext_bindings
@@ -30,7 +32,7 @@ from cel_expr_python.ext import ext_optional
 from cel_expr_python.ext import ext_strings
 
 
-class CelEnvTest(absltest.TestCase):
+class CelEnvTest(parameterized.TestCase):
 
   def test_env_config_from_and_to_yaml(self):
     config: cel.EnvConfig = cel.NewEnvConfigFromYaml("""
@@ -304,6 +306,7 @@ class CelEnvTest(absltest.TestCase):
             "var_int_map": cel.Type.Map(cel.Type.INT, cel.Type.STRING),
             "var_string_map": cel.Type.Map(cel.Type.STRING, cel.Type.BOOL),
             "var_dyn_map": cel.Type.MAP,
+            "var_opt_int": cel.Type.Optional(cel.Type.INT),
             "var_dyn": cel.Type.DYN,
         }
     )
@@ -332,6 +335,8 @@ class CelEnvTest(absltest.TestCase):
               type: "map<int,string>"
             - name: "var_msg"
               type: "cel.expr.conformance.proto2.TestAllTypes"
+            - name: "var_opt_int"
+              type: "optional_type<int>"
             - name: "var_str"
               type: "string"
             - name: "var_string_list"
@@ -743,6 +748,599 @@ class CelEnvTest(absltest.TestCase):
     default_env = cel.NewEnv()
     self.assertTrue(default_env.options().enable_pratt_parser)
 
+  def _new_poly_env(self) -> cel.Env:
+    ext = cel.CelExtension(
+        "poly_ext",
+        functions=[
+            cel.FunctionDecl(
+                "ext_id",
+                [
+                    cel.Overload(
+                        signature="ext_id(~T)",
+                        return_type=cel.Type("~T"),
+                        impl=lambda x: x,
+                    )
+                ],
+            )
+        ],
+    )
+    return cel.NewEnv(
+        extensions=[ext, ext_optional.ExtOptional()],
+        variables={
+            "var_tp": cel.Type("~T"),
+            "var_type": cel.Type.TYPE,
+            "var_int_type": cel.Type.Type(cel.Type.INT),
+            "var_dyn": cel.Type.DYN,
+        },
+        functions=[
+            cel.FunctionDecl(
+                "to_string",
+                [
+                    cel.Overload(
+                        signature="to_string(dyn)",
+                        return_type=cel.Type.STRING,
+                        impl=repr,
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "dyn_id",
+                [
+                    cel.Overload(
+                        signature="dyn_id(dyn)",
+                        return_type=cel.Type.DYN,
+                        impl=lambda x: x,
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "identity",
+                [
+                    cel.Overload(
+                        signature="identity(~T)",
+                        return_type=cel.Type("~T"),
+                        impl=lambda x: x,
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "tp_id",
+                [
+                    cel.Overload(
+                        signature="tp_id(~T)",
+                        return_type=cel.Type("~T"),
+                        impl=lambda x: x,
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "bad_type_ret",
+                [
+                    cel.Overload(
+                        signature="bad_type_ret()",
+                        return_type=cel.Type.TYPE,
+                        impl=lambda: "not_a_type",
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "make_tp",
+                [
+                    cel.Overload(
+                        signature="make_tp()",
+                        return_type=cel.Type("~T"),
+                    )
+                ],
+            ),
+            cel.FunctionDecl(
+                "late_ovl",
+                [
+                    cel.Overload(
+                        signature="late_ovl(int)",
+                        return_type=cel.Type.STRING,
+                    ),
+                    cel.Overload(
+                        signature="late_ovl(string)",
+                        return_type=cel.Type.STRING,
+                    ),
+                ],
+            ),
+            cel.FunctionDecl(
+                "late_dyn",
+                [
+                    cel.Overload(
+                        signature="late_dyn(dyn)",
+                        return_type=cel.Type.STRING,
+                    ),
+                ],
+            ),
+            cel.FunctionDecl(
+                "late_tp",
+                [
+                    cel.Overload(
+                        signature="late_tp(~T)",
+                        return_type=cel.Type("~T"),
+                    ),
+                ],
+            ),
+        ],
+    )
+
+  def test_functions_with_dyn_and_type_params(self):
+    env = self._new_poly_env()
+    self.assertEqual(env.compile("to_string(42)").eval().value(), "42")
+    self.assertEqual(env.compile("identity('abc')").eval().value(), "abc")
+    self.assertEqual(env.compile("ext_id(7) + 1").eval().value(), 8)
+
+    # Type-parameterized variables, parameterized/abstract TypeValues, invalid
+    # TYPE conversions, and overloaded activation functions.
+    self.assertEqual(env.compile("var_tp").return_type(), cel.Type.DYN)
+    self.assertEqual(env.compile("make_tp()").return_type(), cel.Type.DYN)
+    self.assertEqual(
+        env.compile("tp_id(var_type)")
+        .eval(data={"var_type": cel.Type.Type(cel.Type.INT)})
+        .value(),
+        cel.Type.Type(cel.Type.INT),
+    )
+    self.assertEqual(
+        env.compile("tp_id(var_int_type)")
+        .eval(data={"var_int_type": cel.Type.INT})
+        .value(),
+        cel.Type.INT,
+    )
+    abstract_type = cel.Type.AbstractType("optional_type", [cel.Type.INT])
+    self.assertEqual(
+        env.compile("tp_id(var_dyn)")
+        .eval(data={"var_dyn": abstract_type})
+        .value(),
+        abstract_type,
+    )
+    coll_type = cel.Type.AbstractType("collection", [cel.Type.DOUBLE])
+    self.assertEqual(
+        env.compile("tp_id(var_type)")
+        .eval(data={"var_type": coll_type})
+        .value(),
+        coll_type,
+    )
+    self.assertEqual(
+        env.compile("tp_id(var_type)")
+        .eval(data={"var_type": cel.Type.Type(coll_type)})
+        .value(),
+        cel.Type.Type(coll_type),
+    )
+    bad_type_var_res = env.compile("var_type").eval(
+        data={"var_type": "not_a_type"}
+    )
+    self.assertEqual(bad_type_var_res.type(), cel.Type.ERROR)
+    self.assertIn(
+        "Unexpected value type for 'var_type': str. (Expected TYPE<DYN>)",
+        bad_type_var_res.value(),
+    )
+    bad_type_fn_res = env.compile("bad_type_ret()").eval()
+    self.assertEqual(bad_type_fn_res.type(), cel.Type.ERROR)
+    self.assertIn("(Expected TYPE<DYN>)", bad_type_fn_res.value())
+
+    ovl_act = env.Activation(
+        {},
+        functions=[
+            cel.Function(
+                "late_ovl",
+                [cel.Type.INT],
+                False,
+                lambda x: f"int:{x}",
+                return_type=cel.Type.STRING,
+            ),
+            cel.Function(
+                "late_ovl",
+                [cel.Type.STRING],
+                False,
+                lambda x: f"str:{x}",
+                return_type=cel.Type.STRING,
+            ),
+        ],
+    )
+    self.assertEqual(env.compile("late_ovl(1)").eval(ovl_act).value(), "int:1")
+    self.assertEqual(
+        env.compile("late_ovl('a')").eval(ovl_act).value(), "str:a"
+    )
+
+    poly_act = env.Activation(
+        {},
+        functions=[
+            cel.Function(
+                "late_dyn",
+                [cel.Type.DYN],
+                False,
+                repr,
+                return_type=cel.Type.STRING,
+            ),
+            cel.Function(
+                "late_tp",
+                [cel.Type("~T")],
+                False,
+                lambda x: x,
+                return_type=cel.Type("~T"),
+            ),
+        ],
+    )
+    self.assertEqual(env.compile("late_dyn(42)").eval(poly_act).value(), "42")
+    self.assertEqual(
+        env.compile("late_dyn('abc')").eval(poly_act).value(), "'abc'"
+    )
+    self.assertEqual(env.compile("late_tp(7)").eval(poly_act).value(), 7)
+    self.assertEqual(
+        env.compile("late_tp('abc')").eval(poly_act).value(), "abc"
+    )
+
+  @parameterized.named_parameters(
+      ("null_eq", "ext_id(null) == null", True),
+      ("bool_not", "!ext_id(false)", True),
+      ("int_add", "identity(7) + 1", 8),
+      ("uint_add", "ext_id(9223372036854775808u) + 1u", 9223372036854775809),
+      ("double_add", "identity(1.5) + 2.5", 4.0),
+      ("string_add", "ext_id('hello') + '!'", "hello!"),
+      ("bytes_add", "identity(b'ab') + b'cd'", bytearray(b"abcd")),
+      ("list_add", "ext_id([1, 2]) + [3]", [1, 2, 3]),
+      ("map_index", "identity({'a': 1})['a']", 1),
+      ("type_eq", "ext_id(type(1)) == int", True),
+      ("type_list_eq", "ext_id(type([1])) == list", True),
+      ("type_map_eq", "ext_id(type({'a': 1})) == map", True),
+      (
+          "type_ts_eq",
+          (
+              "ext_id(type(timestamp('2025-01-01T00:00:00Z'))) =="
+              " google.protobuf.Timestamp"
+          ),
+          True,
+      ),
+      (
+          "type_dur_eq",
+          "ext_id(type(duration('1s'))) == google.protobuf.Duration",
+          True,
+      ),
+      (
+          "timestamp_add",
+          "identity(timestamp('2025-01-01T00:00:00Z')) + duration('1h')",
+          datetime.datetime(2025, 1, 1, 1, 0, tzinfo=datetime.timezone.utc),
+      ),
+      (
+          "duration_add",
+          "ext_id(duration('10s')) + duration('5s')",
+          datetime.timedelta(seconds=15),
+      ),
+      (
+          "proto_field",
+          (
+              "ext_id(cel.expr.conformance.proto2.TestAllTypes"
+              "{single_string: 'hello'}).single_string"
+          ),
+          "hello",
+      ),
+      (
+          "wrapper_add",
+          "ext_id(google.protobuf.StringValue{value: 'wrap'}) + 'ped'",
+          "wrapped",
+      ),
+  )
+  def test_type_param_function_in_expressions(
+      self,
+      expr_str: str,
+      expected_val: Any,
+  ):
+    env = self._new_poly_env()
+    res = env.compile(expr_str).eval()
+    self.assertEqual(res.value(), expected_val)
+
+  @parameterized.named_parameters(
+      ("null", "null", None, cel.Type.NULL),
+      ("bool_true", "true", True, cel.Type.BOOL),
+      ("bool_false", "false", False, cel.Type.BOOL),
+      ("int", "-42", -42, cel.Type.INT),
+      (
+          "uint_large",
+          "18446744073709551615u",
+          18446744073709551615,
+          cel.Type.UINT,
+      ),
+      ("double", "3.14", 3.14, cel.Type.DOUBLE),
+      ("string", "'abc'", "abc", cel.Type.STRING),
+      ("bytes", r"b'ab\x00c'", bytearray(b"ab\x00c"), cel.Type.BYTES),
+      ("list", "[1, 'two', true]", [1, "two", True], cel.Type.LIST),
+      ("map", "{'a': 1, 'b': 'two'}", {"a": 1, "b": "two"}, cel.Type.MAP),
+      (
+          "timestamp",
+          "timestamp('2025-06-15T12:30:00.500000Z')",
+          datetime.datetime(
+              2025, 6, 15, 12, 30, 0, 500000, datetime.timezone.utc
+          ),
+          cel.Type.TIMESTAMP,
+      ),
+      (
+          "duration",
+          "duration('10s')",
+          datetime.timedelta(seconds=10),
+          cel.Type.DURATION,
+      ),
+      ("type_int", "type(1)", cel.Type.INT, cel.Type.TYPE),
+      ("type_null", "type(null)", cel.Type.NULL, cel.Type.TYPE),
+      ("type_type", "type(int)", cel.Type.TYPE, cel.Type.TYPE),
+      (
+          "type_msg",
+          "type(cel.expr.conformance.proto2.TestAllTypes{})",
+          cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+          cel.Type.TYPE,
+      ),
+      (
+          "proto_msg",
+          (
+              "cel.expr.conformance.proto2.TestAllTypes"
+              "{single_string: 'hello', single_int32: 7}"
+          ),
+          test_all_types_pb.TestAllTypes(single_string="hello", single_int32=7),
+          cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+      ),
+      (
+          "wkt_bool_value",
+          "google.protobuf.BoolValue{value: true}",
+          True,
+          cel.Type.BOOL,
+      ),
+      (
+          "wkt_int32_value",
+          "google.protobuf.Int32Value{value: -12}",
+          -12,
+          cel.Type.INT,
+      ),
+      (
+          "wkt_int64_value",
+          "google.protobuf.Int64Value{value: 42}",
+          42,
+          cel.Type.INT,
+      ),
+      (
+          "wkt_uint64_value",
+          "google.protobuf.UInt64Value{value: 18446744073709551615u}",
+          18446744073709551615,
+          cel.Type.UINT,
+      ),
+      (
+          "wkt_float_value",
+          "google.protobuf.FloatValue{value: 1.5}",
+          1.5,
+          cel.Type.DOUBLE,
+      ),
+      (
+          "wkt_double_value",
+          "google.protobuf.DoubleValue{value: 2.5}",
+          2.5,
+          cel.Type.DOUBLE,
+      ),
+      (
+          "wkt_string_value",
+          "google.protobuf.StringValue{value: 'wrapped'}",
+          "wrapped",
+          cel.Type.STRING,
+      ),
+      (
+          "wkt_bytes_value",
+          "google.protobuf.BytesValue{value: b'bin'}",
+          bytearray(b"bin"),
+          cel.Type.BYTES,
+      ),
+      (
+          "wkt_empty_wrapper",
+          "google.protobuf.Int64Value{}",
+          0,
+          cel.Type.INT,
+      ),
+      (
+          "wkt_unset_wrapper_field",
+          "cel.expr.conformance.proto2.TestAllTypes{}.single_int64_wrapper",
+          None,
+          cel.Type.NULL,
+      ),
+      (
+          "wkt_empty_value",
+          "google.protobuf.Value{}",
+          None,
+          cel.Type.NULL,
+      ),
+      (
+          "wkt_struct",
+          (
+              "google.protobuf.Struct"
+              "{fields: {'k': google.protobuf.Value{string_value: 'v'}}}"
+          ),
+          {"k": "v"},
+          cel.Type.MAP,
+      ),
+      (
+          "wkt_list_value",
+          (
+              "google.protobuf.ListValue"
+              "{values: [google.protobuf.Value{number_value: 2.0}]}"
+          ),
+          [2.0],
+          cel.Type.LIST,
+      ),
+      (
+          "wkt_value",
+          "google.protobuf.Value{bool_value: true}",
+          True,
+          cel.Type.BOOL,
+      ),
+      (
+          "wkt_any",
+          (
+              "cel.expr.conformance.proto2.TestAllTypes"
+              "{single_any: cel.expr.conformance.proto2.TestAllTypes"
+              "{single_string: 'packed'}}.single_any"
+          ),
+          test_all_types_pb.TestAllTypes(single_string="packed"),
+          cel.Type("cel.expr.conformance.proto2.TestAllTypes"),
+      ),
+      (
+          "nested_list",
+          "[timestamp('2025-06-15T12:30:00.500000Z'), duration('5s'), type(1)]",
+          [
+              datetime.datetime(
+                  2025, 6, 15, 12, 30, 0, 500000, datetime.timezone.utc
+              ),
+              datetime.timedelta(seconds=5),
+              cel.Type.INT,
+          ],
+          cel.Type.LIST,
+      ),
+      (
+          "nested_map",
+          "{1: duration('2s'), 2: type('a')}",
+          {1: datetime.timedelta(seconds=2), 2: cel.Type.STRING},
+          cel.Type.MAP,
+      ),
+  )
+  def test_dyn_function_values(
+      self,
+      expr_str: str,
+      expected_val: Any,
+      expected_type: cel.Type,
+  ):
+    env = self._new_poly_env()
+    res = env.compile(f"dyn_id({expr_str})").eval()
+    self.assertEqual(res.type(), expected_type)
+    self.assertEqual(res.value(), expected_val)
+    self.assertEqual(res.plain_value(), expected_val)
+
+  @parameterized.named_parameters(
+      (
+          "list",
+          "type([1])",
+          "list",
+          cel.Type.Type(cel.Type.List(cel.Type.INT)),
+          cel.Type.LIST,
+      ),
+      (
+          "list_cross_elem",
+          "type([1])",
+          "type(['a'])",
+          cel.Type.Type(cel.Type.List(cel.Type.INT)),
+          cel.Type.LIST,
+      ),
+      (
+          "map",
+          "type({'a': 1})",
+          "map",
+          cel.Type.Type(cel.Type.Map(cel.Type.STRING, cel.Type.INT)),
+          cel.Type.MAP,
+      ),
+      (
+          "type_int",
+          "type(int)",
+          "type",
+          cel.Type.Type(cel.Type.Type(cel.Type.INT)),
+          cel.Type.TYPE,
+      ),
+      (
+          "type_type_1",
+          "type(type(1))",
+          "type",
+          cel.Type.Type(cel.Type.Type(cel.Type.INT)),
+          cel.Type.TYPE,
+      ),
+      (
+          "optional_of",
+          "type(optional.of(1))",
+          "optional_type",
+          cel.Type.Type(cel.Type.AbstractType("optional_type", [cel.Type.INT])),
+          cel.Type.AbstractType("optional_type", [cel.Type.DYN]),
+      ),
+      (
+          "optional_of_cross_elem",
+          "type(optional.of(1))",
+          "type(optional.of('a'))",
+          cel.Type.Type(cel.Type.AbstractType("optional_type", [cel.Type.INT])),
+          cel.Type.AbstractType("optional_type", [cel.Type.DYN]),
+      ),
+      (
+          "optional_none",
+          "type(optional.none())",
+          "optional_type",
+          cel.Type.Type(cel.Type.AbstractType("optional_type", [cel.Type.DYN])),
+          cel.Type.AbstractType("optional_type", [cel.Type.DYN]),
+      ),
+  )
+  def test_runtime_type_erasure(
+      self,
+      type_expr: str,
+      expected_cel_type: str,
+      expected_static_type: cel.Type,
+      expected_runtime_val: cel.Type,
+  ):
+    env = self._new_poly_env()
+    expr = env.compile(type_expr)
+    self.assertEqual(expr.return_type(), expected_static_type)
+    self.assertEqual(expr.eval().value(), expected_runtime_val)
+    self.assertTrue(
+        env.compile(f"{type_expr} == {expected_cel_type}").eval().value()
+    )
+    tp_expr = env.compile(f"tp_id({type_expr})")
+    self.assertEqual(tp_expr.return_type(), expected_static_type)
+    self.assertEqual(tp_expr.eval().value(), expected_runtime_val)
+    self.assertTrue(
+        env.compile(f"tp_id({type_expr}) == {expected_cel_type}").eval().value()
+    )
+
+  def test_abstract_type_config_and_value_type(self):
+    env = cel.NewEnv(
+        variables={
+            "var_coll": cel.Type.AbstractType("collection", [cel.Type.DOUBLE])
+        },
+        extensions=[ext_optional.ExtOptional(1)],
+    )
+    self.assertEqual(
+        normalize_yaml(env.config().to_yaml()),
+        normalize_yaml("""
+          extensions:
+            - name: "optional"
+              version: 1
+          variables:
+            - name: "var_coll"
+              type: "collection<double>"
+        """),
+    )
+    res = env.compile("optional.none()").eval()
+    self.assertEqual(
+        res.type(), cel.Type.AbstractType("optional_type", [cel.Type.DYN])
+    )
+    coll_ext = cel.CelExtension(
+        "coll_ext",
+        functions=[
+            cel.FunctionDecl(
+                "coll_id",
+                [
+                    cel.Overload(
+                        "coll_id_ovl",
+                        cel.Type.AbstractType("collection", [cel.Type.DOUBLE]),
+                        [
+                            cel.Type.AbstractType(
+                                "collection", [cel.Type.DOUBLE]
+                            )
+                        ],
+                        impl=lambda x: x,
+                    )
+                ],
+            )
+        ],
+    )
+    coll_env = cel.NewEnv(
+        variables={
+            "var_coll": cel.Type.AbstractType("collection", [cel.Type.DOUBLE])
+        },
+        extensions=[coll_ext],
+    )
+    self.assertEqual(
+        coll_env.compile("coll_id(var_coll)").return_type(),
+        cel.Type.AbstractType("collection", [cel.Type.DOUBLE]),
+    )
 
 class TestCelExtension(cel.CelExtension):
   """An example CEL extension for testing."""
@@ -755,11 +1353,8 @@ class TestCelExtension(cel.CelExtension):
                 "hello",
                 [
                     cel.Overload(
-                        "hello(string)",
+                        signature="hello(string)",
                         return_type=cel.Type.STRING,
-                        parameters=[
-                            cel.Type.STRING,
-                        ],
                         impl=lambda arg: f"Hello, {arg}!",
                     )
                 ],

@@ -42,7 +42,7 @@ exclude = ["*testdata*"]
 "*" = ["*.pyi"]
 
 [tool.setuptools.exclude-package-data]
-"*" = ["*_test.py"]
+"*" = ["*_test.py", "leak_check.py"]
 
 [tool.cibuildwheel]
 build = "cp310-* cp311-* cp312-* cp313-* cp314-*"
