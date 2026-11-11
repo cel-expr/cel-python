@@ -314,6 +314,25 @@ env = cel.NewEnv(pool, extensions=[ext_math.ExtMath()])
 expr = env.compile("math.sqrt(4)")
 ```
 
+#### Working with optional values
+
+When `ext_optional.ExtOptional()` is enabled, CEL `optional_type` values map to
+`cel.Optional` (`cel.Optional.of(value)` and `cel.Optional.none()`), and
+optional variable/function types can be declared with `cel.Type.Optional(...)`
+(or `cel.Type.OPTIONAL` for `optional_type<dyn>`):
+
+```python
+env = cel.NewEnv(
+    variables={"x": cel.Type.Optional(cel.Type.INT)},
+    extensions=[ext_optional.ExtOptional()],
+)
+res = env.compile("x").eval(data={"x": cel.Optional.of(42)})
+opt = res.plain_value()  # cel.Optional.of(42)
+print(opt.has_value())   # True
+print(opt.value())       # 42
+print(opt.or_value(0))   # 42
+```
+
 #### Defining a custom extension in Python
 
 You can define custom functions and pass them as an extension.

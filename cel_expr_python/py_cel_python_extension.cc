@@ -117,7 +117,8 @@ absl::Status PyCelPythonExtension::ConfigureRuntime(
       std::vector<cel::Kind> types;
       types.reserve(overload.parameters().size());
       for (const PyCelType& arg : overload.parameters()) {
-        if (arg.GetKind() == cel::Kind::kDyn) {
+        if (arg.GetKind() == cel::Kind::kDyn ||
+            arg.GetKind() == cel::Kind::kTypeParam) {
           // C++ runtime dispatcher historically uses kAny for wildcard type (
           // not distinguishing between dyn and any)
           types.push_back(cel::Kind::kAny);
