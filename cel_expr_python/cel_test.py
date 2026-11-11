@@ -22,11 +22,12 @@ import sys
 from typing import Any
 
 from google.protobuf import message_factory
+
 from google.protobuf import duration_pb2 as duration_pb
 from google.protobuf import timestamp_pb2 as timestamp_pb
 from absl.testing import absltest
-from cel_expr_python import cel
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
+from cel_expr_python import cel
 
 
 @absltest.skipThisClass("Base class")
@@ -351,9 +352,7 @@ class _CelTestBase(absltest.TestCase):
     )
     # TODO(b/516948297): Fix double to string conversion on macOS and
     # revert to self.assertEqual.
-    self.assertTrue(
-        res.value().startswith("Hey, CEL! You are a piece of 3.14")
-    )
+    self.assertTrue(res.value().startswith("Hey, CEL! You are a piece of 3.14"))
 
   def testProto_unexpectedType(self):
     msg = test_all_types_pb.TestAllTypes.NestedMessage

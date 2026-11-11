@@ -23,8 +23,8 @@ import time
 from typing import Any
 
 from absl.testing import absltest
-from cel_expr_python import cel
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
+from cel_expr_python import cel
 
 
 @dataclasses.dataclass(frozen=True)
