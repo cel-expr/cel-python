@@ -862,8 +862,9 @@ class _CelTestBase(absltest.TestCase):
     self.assertTrue(self._eval("{'a': 1}").equals(self._eval("{'a': 1.0}")))
     self.assertFalse(self._eval("[1, 2]").equals(self._eval("[1, 3]")))
 
-    # Proto comparisons: == delegates to Python protobuf Message.__eq__ (raw
-    # Any bytes), whereas equals() uses CEL MessageEquals (unpacks Any).
+    # Proto comparisons: == delegates to Python protobuf Message.__eq__ (whose
+    # Any handling varies across protobuf runtimes), whereas equals() uses CEL
+    # MessageEquals (unpacks Any).
     msg1 = test_all_types_pb.TestAllTypes()
     msg1.single_any.Pack(
         test_all_types_pb.TestAllTypes(single_int32=1, single_string="a")
@@ -877,7 +878,7 @@ class _CelTestBase(absltest.TestCase):
     cel_msg1 = self._eval("var_msg", {"var_msg": msg1})
     cel_msg2 = self._eval("var_msg", {"var_msg": msg2})
     self.assertEqual(cel_msg1, msg1)
-    self.assertNotEqual(cel_msg1, cel_msg2)
+    self.assertEqual(cel_msg1 == cel_msg2, msg1 == msg2)
     self.assertTrue(cel_msg1.equals(cel_msg2))
 
   def testTypeInitSignature(self):
