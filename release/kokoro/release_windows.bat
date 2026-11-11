@@ -131,6 +131,9 @@ if !ERRORLEVEL! NEQ 0 (
 if exist "cel_expr_python\*_test.py" (
     del /Q "cel_expr_python\*_test.py"
 )
+if exist "cel_expr_python\leak_check.py" (
+    del /Q "cel_expr_python\leak_check.py"
+)
 
 :: Substitute $VERSION in pyproject.toml with the value of VERSION.
 !PYTHON_EXE! -c "import sys; content = open('pyproject.toml').read(); open('pyproject.toml', 'w').write(content.replace('$VERSION', sys.argv[1]))" "%VERSION%"

@@ -55,6 +55,24 @@ namespace cel_python {
 
 namespace py = ::pybind11;
 
+namespace {
+
+std::string PyObjectRepr(PyObject* obj) {
+  if (obj == nullptr) {
+    return "<null>";
+  }
+  PyObject* repr = PyObject_Repr(obj);
+  const char* repr_cstr = repr != nullptr ? PyUnicode_AsUTF8(repr) : nullptr;
+  if (repr_cstr == nullptr) {
+    PyErr_Clear();
+  }
+  std::string repr_str = repr_cstr != nullptr ? repr_cstr : "<unknown>";
+  Py_XDECREF(repr);
+  return repr_str;
+}
+
+}  // namespace
+
 void PyCelValue::DefinePythonBindings(py::module& m) {
   py::class_<PyCelValue>(m, "Value")
       .def("type", &PyCelValue::Type)
@@ -767,9 +785,9 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           time = py::cast<absl::Time>(py_object);
         } catch (const py::cast_error& e) {
           PyErr_Clear();
-          return absl::UnknownError(absl::StrFormat(
-              "Cannot convert %s to absl::Time: %s",
-              PyUnicode_AsUTF8(PyObject_Repr(py_object)), e.what()));
+          return absl::UnknownError(
+              absl::StrFormat("Cannot convert %s to absl::Time: %s",
+                              PyObjectRepr(py_object), e.what()));
         }
         absl::StatusOr<cel::TimestampValue> timestamp_value =
             cel::SafeTimestampValue(time);
@@ -808,7 +826,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           PyErr_Clear();
           return absl::UnknownError(
               absl::StrFormat("Cannot convert %s to cel.Type.TIMESTAMP",
-                              PyUnicode_AsUTF8(PyObject_Repr(py_object))));
+                              PyObjectRepr(py_object)));
         }
         absl::Time time =
             absl::FromUnixSeconds(seconds) + absl::Nanoseconds(nanos);
@@ -830,9 +848,9 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           duration = py::cast<absl::Duration>(py_object);
         } catch (const py::cast_error& e) {
           PyErr_Clear();
-          return absl::UnknownError(absl::StrFormat(
-              "Cannot convert %s to absl::Duration: %s",
-              PyUnicode_AsUTF8(PyObject_Repr(py_object)), e.what()));
+          return absl::UnknownError(
+              absl::StrFormat("Cannot convert %s to absl::Duration: %s",
+                              PyObjectRepr(py_object), e.what()));
         }
         absl::StatusOr<cel::DurationValue> duration_value =
             cel::SafeDurationValue(duration);
@@ -869,9 +887,8 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         Py_XDECREF(py_nanos);
         if (!ok) {
           PyErr_Clear();
-          return absl::UnknownError(
-              absl::StrFormat("Cannot convert %s to absl::Duration",
-                              PyUnicode_AsUTF8(PyObject_Repr(py_object))));
+          return absl::UnknownError(absl::StrFormat(
+              "Cannot convert %s to absl::Duration", PyObjectRepr(py_object)));
         }
         absl::Duration duration =
             absl::Seconds(seconds) + absl::Nanoseconds(nanos);
@@ -953,28 +970,26 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         while (PyDict_Next(py_object, &pos, &key, &value)) {
           // Note: PyDict_Next returns borrowed references, so we shouldn't
           // DECREF them.
-          CEL_PYTHON_ASSIGN_OR_RETURN(
-              cel::Value converted_key,
-              PyObjectToCelValue(
-                  key, key_type,
-                  [context, key]() {
-                    return absl::StrFormat(
-                        "%s[%s]", context(),
-                        PyUnicode_AsUTF8(PyObject_Repr(key)));
-                  },
-                  env, arena));
+          CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_key,
+                                      PyObjectToCelValue(
+                                          key, key_type,
+                                          [context, key]() {
+                                            return absl::StrFormat(
+                                                "%s[%s]", context(),
+                                                PyObjectRepr(key));
+                                          },
+                                          env, arena));
 
-          CEL_PYTHON_ASSIGN_OR_RETURN(
-              cel::Value converted_value,
-              PyObjectToCelValue(
-                  value, value_type,
-                  [context, key, value]() {
-                    return absl::StrFormat(
-                        "%s[%s] -> %s", context(),
-                        PyUnicode_AsUTF8(PyObject_Repr(key)),
-                        PyUnicode_AsUTF8(PyObject_Repr(value)));
-                  },
-                  env, arena));
+          CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_value,
+                                      PyObjectToCelValue(
+                                          value, value_type,
+                                          [context, key, value]() {
+                                            return absl::StrFormat(
+                                                "%s[%s] -> %s", context(),
+                                                PyObjectRepr(key),
+                                                PyObjectRepr(value));
+                                          },
+                                          env, arena));
           CEL_PYTHON_RETURN_IF_ERROR(
               builder->Put(converted_key, converted_value));
         }
