@@ -16,6 +16,7 @@
 
 #include <Python.h>
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <utility>
@@ -107,14 +108,34 @@ absl::StatusOr<cel::Value> PyCelFunctionAdapter::Invoke(
   CEL_PYTHON_ASSIGN_OR_RETURN(auto py_arena,
                               PyCelArena::FromProtoArena(context.arena()));
   PyObject* py_args = PyTuple_New(args.size());
-  for (int i = 0; i < args.size(); ++i) {
-    PyTuple_SetItem(py_args, i,
-                    CelValueToPyObject(args[i], env, py_arena,
-                                       /*plain_value=*/true));
+  if (py_args == nullptr) {
+    absl::Status status = PyErr_toStatus();
+    if (status.ok()) {
+      status = absl::ResourceExhaustedError("Failed to allocate args tuple");
+    }
+    return cel::ErrorValue::From(status, context.arena());
+  }
+  for (size_t i = 0; i < args.size(); ++i) {
+    PyObject* py_arg = CelValueToPyObject(args[i], env, py_arena,
+                                          /*plain_value=*/true);
+    if (py_arg == nullptr) {
+      absl::Status status = PyErr_toStatus();
+      Py_DECREF(py_args);
+      if (status.ok()) {
+        status = absl::InternalError(
+            "Failed to convert CEL argument to Python object");
+      }
+      return cel::ErrorValue::From(status, context.arena());
+    }
+    PyTuple_SetItem(py_args, i, py_arg);
   }
   PyObject* result = PyObject_CallObject(py_function_, py_args);
-  Py_DECREF(py_args);
   absl::Status status = PyErr_toStatus();
+  Py_DECREF(py_args);
+  if (status.ok() && result == nullptr) {
+    status = absl::InternalError(
+        "Python function returned null without setting an error");
+  }
   if (!status.ok()) {
     Py_XDECREF(result);
     return cel::ErrorValue::From(status, context.arena());

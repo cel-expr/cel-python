@@ -1,5 +1,6 @@
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_python//python:py_library.bzl", "py_library")
 load("@rules_python//python:py_test.bzl", "py_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -150,6 +151,13 @@ cc_library(
     ],
 )
 
+py_library(
+    name = "leak_check",
+    testonly = True,
+    srcs = ["leak_check.py"],
+    visibility = [":__subpackages__"],
+)
+
 py_test(
     name = "cel_test",
     srcs = ["cel_test.py"],
@@ -157,8 +165,10 @@ py_test(
         ":cel",
     ],
     deps = [
+        ":leak_check",
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
         "@com_google_protobuf//:protobuf",
         "@com_google_protobuf//:protobuf_python",
     ] + select({
@@ -174,6 +184,7 @@ py_test(
         ":cel",
     ],
     deps = [
+        ":leak_check",
         "//testing:proto2_test_all_types_py_pb2",
         "@com_google_absl_py//absl/testing:absltest",
     ] + select({
