@@ -192,6 +192,7 @@ class BasicTest(unittest.TestCase):
             ("cel_expr_python/", "cel_expr_python-", "cel_expr_python.libs/")
         )
         or f.endswith("_test.py")
+        or f == "cel_expr_python/leak_check.py"
         or "/testdata/" in f
     ]
     self.assertEqual(
