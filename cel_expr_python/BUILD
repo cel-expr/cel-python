@@ -1,6 +1,7 @@
-load("@pybind11_bazel//:build_defs.bzl", "pybind_extension", "pybind_library")
+load("@pybind11_bazel//:build_defs.bzl", "pybind_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_python//python:py_test.bzl", "py_test")
+load(":pybind_extension.bzl", "pybind_extension")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -204,6 +205,37 @@ py_test(
             "//cel_expr_python/ext:ext_lists",
             "//cel_expr_python/ext:ext_math",
             "//cel_expr_python/ext:ext_optional",
+            "//cel_expr_python/ext:ext_strings",
+        ],
+    }),
+)
+
+py_test(
+    name = "exported_symbols_test",
+    srcs = ["exported_symbols_test.py"],
+    data = [
+        ":cel",
+        "//cel_expr_python/ext:ext_bindings",
+        "//cel_expr_python/ext:ext_encoders",
+        "//cel_expr_python/ext:ext_lists",
+        "//cel_expr_python/ext:ext_math",
+        "//cel_expr_python/ext:ext_optional",
+        "//cel_expr_python/ext:ext_proto",
+        "//cel_expr_python/ext:ext_strings",
+    ],
+    deps = [
+        "@com_google_absl_py//absl/testing:absltest",
+        "@com_google_absl_py//absl/testing:parameterized",
+    ] + select({
+        "@platforms//os:windows": [],
+        "//conditions:default": [
+            ":cel",
+            "//cel_expr_python/ext:ext_bindings",
+            "//cel_expr_python/ext:ext_encoders",
+            "//cel_expr_python/ext:ext_lists",
+            "//cel_expr_python/ext:ext_math",
+            "//cel_expr_python/ext:ext_optional",
+            "//cel_expr_python/ext:ext_proto",
             "//cel_expr_python/ext:ext_strings",
         ],
     }),
