@@ -19,12 +19,14 @@ import concurrent.futures
 import dataclasses
 import gc
 import logging
+import threading
 import time
 from typing import Any
 
 from absl.testing import absltest
 from cel.expr.conformance.proto2 import test_all_types_pb2 as test_all_types_pb
 from cel_expr_python import cel
+from cel_expr_python import leak_check
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,6 +96,7 @@ _TEST_CASES = [
 ]
 
 
+@leak_check.leak_checked
 class CelParallelTest(absltest.TestCase):
 
   def setUp(self):
@@ -119,7 +122,6 @@ class CelParallelTest(absltest.TestCase):
             )
         ],
     )
-    self.object_counts_before_test = self._grab_object_counts()
 
   def tearDown(self):
     """Tears down the test environment."""
@@ -128,26 +130,6 @@ class CelParallelTest(absltest.TestCase):
     gc.collect()
     # Assert that all Arenas have been garbage-collected
     self.assertEqual(cel._InternalArena._get_instance_count(), 0)
-    self._check_for_leaks()
-
-  def _grab_object_counts(self) -> dict[str, int]:
-    gc.collect()
-    all_objects = gc.get_objects()
-    type_counts = {}
-    for obj in all_objects:
-      obj_type = type(obj)
-      type_counts[obj_type.__name__] = type_counts.get(obj_type, 0) + 1
-    return type_counts
-
-  def _check_for_leaks(self):
-    type_counts = self._grab_object_counts()
-    for key, count in type_counts.items():
-      if count != self.object_counts_before_test.get(key, 0):
-        self.fail(
-            f"Object count for {key} did not match expected count. "
-            f"Expected: {self.object_counts_before_test.get(key, 0)}, "
-            f"Actual: {count}",
-        )
 
   def _test_eval(self, multi_threaded: bool):
     compiled_exprs = [self.env.compile(tc.expr) for tc in _TEST_CASES]
@@ -276,6 +258,67 @@ class CelParallelTest(absltest.TestCase):
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
       results = list(executor.map(eval_custom_fn, range(100)))
     self.assertLen(results, 100)
+
+  def testConcurrentTypeToCelTypeWithDescriptorPoolLookup(self):
+    """Tests that PyCelType::ToCelType releases the GIL before DescriptorPool."""
+    for _ in range(5):
+      lookup_started = threading.Event()
+
+      class _SlowDescriptorPool:
+
+        def __init__(self, pool: Any, event: threading.Event):
+          self._pool = pool
+          self._event = event
+
+        def FindFileByName(self, filename: str):  # pylint: disable=invalid-name
+          return self._pool.FindFileByName(filename)
+
+        def FindFileContainingSymbol(self, symbol_name: str):  # pylint: disable=invalid-name
+          if symbol_name == "cel.expr.conformance.proto2.TestAllTypes":
+            self._event.set()
+            # Releases the GIL while DescriptorPool's internal mutex is held.
+            time.sleep(0.1)
+          return self._pool.FindFileContainingSymbol(symbol_name)
+
+      slow_pool = _SlowDescriptorPool(
+          test_all_types_pb.DESCRIPTOR.pool, lookup_started
+      )
+      env = cel.NewEnv(
+          descriptor_pool=slow_pool,
+          variables={"var_type": cel.Type.TYPE},
+      )
+      type_expr = env.compile("var_type == var_type")
+      # Warm up the runtime/program so eval_type reaches PyObjectToCelValue
+      # immediately without paying first-time Runtime initialization cost.
+      self.assertTrue(type_expr.eval(data={"var_type": cel.Type.INT}).value())
+
+      def compile_message():
+        msg_expr = env.compile("cel.expr.conformance.proto2.TestAllTypes{}")
+        self.assertIsNotNone(msg_expr)
+
+      def eval_type():
+        self.assertTrue(lookup_started.wait(timeout=5.0))
+        res = type_expr.eval(
+            data={
+                "var_type": cel.Type.List(
+                    cel.Type("cel.expr.conformance.proto2.TestAllTypes")
+                )
+            }
+        )
+        self.assertTrue(res.value())
+
+      executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+      timed_out = False
+      try:
+        compile_future = executor.submit(compile_message)
+        eval_future = executor.submit(eval_type)
+        compile_future.result(timeout=5.0)
+        eval_future.result(timeout=5.0)
+      except BaseException:
+        timed_out = True
+        raise
+      finally:
+        executor.shutdown(wait=not timed_out)
 
 
 if __name__ == "__main__":
