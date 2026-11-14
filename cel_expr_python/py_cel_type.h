@@ -58,6 +58,7 @@ class PyCelType {
   // May throw if the key type is not supported.
   static PyCelType MapType(const PyCelType& key_type,
                            const PyCelType& value_type);
+  static PyCelType OptionalType(const PyCelType& element_type);
   static PyCelType TypeType(const PyCelType& parameter);
   static PyCelType AbstractType(const std::string& name,
                                 const std::vector<PyCelType>& params = {});
@@ -66,6 +67,9 @@ class PyCelType {
   std::string GetName() const;
   bool IsAssignableFrom(const PyCelType& other) const;
   bool IsMessage() const { return kind_ == cel::Kind::kMessage; }
+  bool IsOptional() const {
+    return kind_ == cel::Kind::kOpaque && name_ == "optional_type";
+  }
 
   size_t GetParamCount() const { return parameters_.size(); }
   const PyCelType& GetParam(int index) const { return parameters_[index]; }
@@ -97,6 +101,7 @@ class PyCelType {
   static const PyCelType& Dyn();
   static const PyCelType& List();
   static const PyCelType& Map();
+  static const PyCelType& Optional();
   static const PyCelType& Timestamp();
   static const PyCelType& Duration();
   static const PyCelType& Type();

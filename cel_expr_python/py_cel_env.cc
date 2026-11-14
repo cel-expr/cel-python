@@ -26,6 +26,8 @@
 
 #include "absl/log/absl_check.h"
 #include "common/container.h"
+#include "compiler/compiler.h"
+#include "cel_expr_python/cel_compiler_capsule.h"
 #include "cel_expr_python/py_cel_activation.h"
 #include "cel_expr_python/py_cel_arena.h"
 #include "cel_expr_python/py_cel_env_config.h"
@@ -145,6 +147,19 @@ void PyCelEnv::DefinePythonBindings(pybind11::module& m) {
       .def("compile", &PyCelEnv::Compile, py::arg("expression"),
            py::arg("disable_check") = false)
       .def("deserialize", &PyCelEnv::Deserialize, py::arg("serialized"))
+      .def("_compiler_capsule",
+           [](PyCelEnv& self) {
+             std::shared_ptr<PyCelEnvInternal> env = self.GetEnv();
+             const cel::Compiler* compiler = nullptr;
+             {
+               py::gil_scoped_release gil_release;
+               compiler = ThrowIfError(env->GetCompiler());
+             }
+             // Aliasing constructor: the capsule keeps `env`, which owns the
+             // compiler, alive.
+             return MakeCelCompilerCapsule(
+                 std::shared_ptr<const cel::Compiler>(env, compiler));
+           })
       .def(
           "Activation",
           [](PyCelEnv& self,

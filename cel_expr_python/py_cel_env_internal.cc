@@ -322,7 +322,11 @@ absl::StatusOr<std::unique_ptr<cel::Runtime>> PyCelEnvInternal::BuildRuntime(
         CEL_PYTHON_ASSIGN_OR_RETURN(
             cel::Type type,
             cel::TypeInfoToType(parameter, descriptor_pool_.get(), &arena));
-        param_kinds.push_back(static_cast<cel::Kind>(type.kind()));
+        cel::Kind kind = static_cast<cel::Kind>(type.kind());
+        if (kind == cel::Kind::kDyn || kind == cel::Kind::kTypeParam) {
+          kind = cel::Kind::kAny;
+        }
+        param_kinds.push_back(kind);
       }
       cel::FunctionDescriptor descriptor(
           function_config.name, overload_config.is_member_function, param_kinds,
