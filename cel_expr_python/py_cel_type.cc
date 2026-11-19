@@ -14,14 +14,17 @@
 
 #include "cel_expr_python/py_cel_type.h"
 
-#include <Python.h>  // IWYU pragma: keep - Needed for PyObject
+#include <Python.h>    // IWYU pragma: keep - Needed for PyObject
+#include <datetime.h>  // IWYU pragma: keep
 
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "absl/base/call_once.h"
 #include "absl/base/no_destructor.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/absl_check.h"
@@ -40,6 +43,7 @@
 #include "common/value_kind.h"
 #include "env/config.h"
 #include "env/type_info.h"
+#include "cel_expr_python/py_cel_optional.h"
 #include "cel_expr_python/py_error_status.h"
 #include "cel_expr_python/status_macros.h"
 #include "google/protobuf/arena.h"
@@ -70,6 +74,8 @@ void PyCelType::DefinePythonBindings(py::module& m) {
   type.def_static("List", &PyCelType::ListType, py::arg("element_type"))
       .def_static("Map", &PyCelType::MapType, py::arg("key_type"),
                   py::arg("element_type"))
+      .def_static("Optional", &PyCelType::OptionalType,
+                  py::arg("element_type") = PyCelType::Dyn())
       .def_static("Type", &PyCelType::TypeType, py::arg("element_type"))
       .def_static("AbstractType", &PyCelType::AbstractType, py::arg("name"),
                   py::arg("params") = std::vector<PyCelType>());
@@ -86,6 +92,7 @@ void PyCelType::DefinePythonBindings(py::module& m) {
   type.attr("ERROR") = PyCelType::Error();
   type.attr("LIST") = PyCelType::List();
   type.attr("MAP") = PyCelType::Map();
+  type.attr("OPTIONAL") = PyCelType::Optional();
   type.attr("TIMESTAMP") = PyCelType::Timestamp();
   type.attr("DURATION") = PyCelType::Duration();
   type.attr("TYPE") = PyCelType::Type();
@@ -102,7 +109,7 @@ PyCelType::PyCelType(const std::string& name) : parameters_({}) {
     name_ = "DURATION";
   } else {
     kind_ = cel::Kind::kMessage;
-    name_ = std::move(name);
+    name_ = name;
   }
 }
 
@@ -131,13 +138,17 @@ PyCelType PyCelType::MapType(const PyCelType& key_type,
   return PyCelType(cel::Kind::kMap, "MAP", {key_type, value_type});
 }
 
+PyCelType PyCelType::OptionalType(const PyCelType& element_type) {
+  return AbstractType("optional_type", {element_type});
+}
+
 PyCelType PyCelType::TypeType(const PyCelType& parameter) {
   return PyCelType(cel::Kind::kType, "TYPE", {parameter});
 }
 
 PyCelType PyCelType::AbstractType(const std::string& name,
                                   const std::vector<PyCelType>& params) {
-  return PyCelType(cel::Kind::kType, name, params);
+  return PyCelType(cel::Kind::kOpaque, name, params);
 }
 
 bool PyCelType::operator==(const PyCelType& other) const {
@@ -146,12 +157,20 @@ bool PyCelType::operator==(const PyCelType& other) const {
 }
 
 bool PyCelType::IsAssignableFrom(const PyCelType& other) const {
+  if (kind_ == cel::Kind::kDyn) {
+    return true;
+  }
+
   if (kind_ != other.kind_) {
     return false;
   }
 
-  if (kind_ == cel::Kind::kMessage) {
+  if (kind_ == cel::Kind::kMessage || kind_ == cel::Kind::kTypeParam) {
     return name_ == other.name_;
+  }
+
+  if (kind_ == cel::Kind::kOpaque && name_ != other.name_) {
+    return false;
   }
 
   if (parameters_.empty()) {
@@ -162,7 +181,7 @@ bool PyCelType::IsAssignableFrom(const PyCelType& other) const {
     return false;
   }
 
-  for (int i = 0; i < parameters_.size(); ++i) {
+  for (size_t i = 0; i < parameters_.size(); ++i) {
     if (!parameters_[i].IsAssignableFrom(other.parameters_[i])) {
       return false;
     }
@@ -242,6 +261,13 @@ const PyCelType& PyCelType::List() {
 const PyCelType& PyCelType::Map() {
   static const absl::NoDestructor<PyCelType> kInternalType(
       PyCelType::MapType(PyCelType::Dyn(), PyCelType::Dyn()));
+  return *kInternalType;
+}
+
+// cel.Type.Optional(cel.Type.DYN) aka cel.Type.OPTIONAL
+const PyCelType& PyCelType::Optional() {
+  static const absl::NoDestructor<PyCelType> kInternalType(
+      PyCelType::OptionalType(PyCelType::Dyn()));
   return *kInternalType;
 }
 
@@ -336,6 +362,9 @@ PyCelType PyCelType::FromCelType(const cel::Type& cel_type) {
     }
     case cel::TypeKind::kDyn:
       return PyCelType::Dyn();
+    case cel::TypeKind::kTypeParam:
+      return PyCelType(cel::Kind::kTypeParam,
+                       std::string(cel_type.AsTypeParam()->name()));
     case cel::TypeKind::kOpaque: {
       const auto& abstract_type = cel_type.AsOpaque();
       std::vector<PyCelType> params;
@@ -395,15 +424,25 @@ PyCelType PyCelType::ForCelValue(const cel::Value& cel_value) {
       return PyCelType::Unknown();
     case cel::ValueKind::kType:
       return PyCelType::Type();
+    case cel::ValueKind::kOpaque:
+      return FromCelType(cel_value.GetOpaque().GetRuntimeType());
     default:
       // TODO(b/447177883): Add support for all standard types.
       return PyCelType::Error();
   }
 }
 
+static void EnsureDateTimeModuleImported() {
+  static absl::once_flag import_py_datetime_once_flag;
+  absl::call_once(import_py_datetime_once_flag, []() { PyDateTime_IMPORT; });
+}
+
 absl::StatusOr<PyCelType> PyCelType::ForPyObject(
     PyObject* py_object, const std::function<std::string()>& context) {
   ABSL_CHECK(PyGILState_Check());
+  if (py::isinstance<PyCelOptional>(py::handle(py_object))) {
+    return PyCelType::Optional();
+  }
   PyTypeObject* py_type = Py_TYPE(py_object);
   const absl::flat_hash_map<std::string_view, PyCelType>& primitive_py_types =
       GetPrimitivePyTypes();
@@ -448,6 +487,18 @@ absl::StatusOr<PyCelType> PyCelType::ForPyObject(
     }
   } else {
     PyErr_Clear();
+  }
+
+  EnsureDateTimeModuleImported();
+  if (PyDateTime_Check(py_object)) {
+    return PyCelType::Timestamp();
+  }
+  if (PyDelta_Check(py_object)) {
+    return PyCelType::Duration();
+  }
+
+  if (py::isinstance<PyCelType>(py::handle(py_object))) {
+    return PyCelType::Type();
   }
 
   PyTypeObject* type = Py_TYPE(py_object);
@@ -509,6 +560,8 @@ PyCelType PyCelType::FromTypeProto(const cel::expr::Type& type) {
     }
     case cel::expr::Type::kMessageType:
       return PyCelType(type.message_type());
+    case cel::expr::Type::kTypeParam:
+      return PyCelType(cel::Kind::kTypeParam, type.type_param());
     case cel::expr::Type::kType: {
       cel::expr::Type parameter = type.type();
       if (parameter.type_kind_case()) {
@@ -537,6 +590,9 @@ PyCelType PyCelType::FromTypeProto(const cel::expr::Type& type) {
 }
 
 PyCelType PyCelType::FromTypeInfo(const cel::Config::TypeInfo& type_info) {
+  if (type_info.is_type_param) {
+    return PyCelType(cel::Kind::kTypeParam, type_info.name);
+  }
   if (type_info.name == "null") return PyCelType::Null();
   if (type_info.name == "bool") return PyCelType::Bool();
   if (type_info.name == "int") return PyCelType::Int();
@@ -560,13 +616,19 @@ PyCelType PyCelType::FromTypeInfo(const cel::Config::TypeInfo& type_info) {
     return PyCelType::MapType(FromTypeInfo(type_info.params[0]),
                               FromTypeInfo(type_info.params[1]));
   }
+  if (type_info.name == "optional_type") {
+    if (type_info.params.empty()) {
+      return PyCelType::Optional();
+    }
+    return PyCelType::OptionalType(FromTypeInfo(type_info.params[0]));
+  }
   if (type_info.name == "type") {
     if (type_info.params.empty()) {
       return PyCelType::Type();
     }
     return PyCelType::TypeType(FromTypeInfo(type_info.params[0]));
   }
-  if (type_info.is_type_param || !type_info.params.empty()) {
+  if (!type_info.params.empty()) {
     std::vector<PyCelType> params;
     params.reserve(type_info.params.size());
     for (const auto& param : type_info.params) {
@@ -581,6 +643,8 @@ absl::StatusOr<cel::Type> PyCelType::ToCelType(
     const PyCelType& type, google::protobuf::Arena* arena,
     const google::protobuf::DescriptorPool& descriptor_pool) {
   switch (type.GetKind()) {
+    case cel::Kind::kNull:
+      return cel::NullType();
     case cel::Kind::kBool:
       return cel::BoolType();
     case cel::Kind::kInt:
@@ -623,6 +687,36 @@ absl::StatusOr<cel::Type> PyCelType::ToCelType(
       return cel::TimestampType();
     case cel::Kind::kDuration:
       return cel::DurationType();
+    case cel::Kind::kType: {
+      if (type.GetParamCount() == 0) {
+        return cel::TypeType();
+      }
+      CEL_PYTHON_ASSIGN_OR_RETURN(
+          cel::Type param_type,
+          ToCelType(type.GetParam(0), arena, descriptor_pool));
+      return cel::TypeType(arena, param_type);
+    }
+    case cel::Kind::kOpaque: {
+      std::vector<cel::Type> params;
+      params.reserve(type.GetParamCount());
+      for (size_t i = 0; i < type.GetParamCount(); ++i) {
+        CEL_PYTHON_ASSIGN_OR_RETURN(
+            cel::Type param_type,
+            ToCelType(type.GetParam(i), arena, descriptor_pool));
+        params.push_back(param_type);
+      }
+      if (type.name_ == cel::OptionalType::kName && params.size() == 1) {
+        return cel::OptionalType(arena, params[0]);
+      }
+      const std::string* arena_name =
+          google::protobuf::Arena::Create<std::string>(arena, type.name_);
+      return cel::OpaqueType(arena, *arena_name, params);
+    }
+    case cel::Kind::kTypeParam: {
+      const std::string* arena_name =
+          google::protobuf::Arena::Create<std::string>(arena, type.name_);
+      return cel::TypeParamType(*arena_name);
+    }
     default:
       return cel::DynType();
   }
@@ -674,11 +768,21 @@ cel::Config::TypeInfo PyCelType::ToTypeInfo(const PyCelType& type) {
     case cel::Kind::kDuration:
       type_info.name = "duration";
       break;
+    case cel::Kind::kType:
+      type_info.name = "type";
+      if (!type.parameters_.empty()) {
+        type_info.params.push_back(ToTypeInfo(type.GetParam(0)));
+      }
+      break;
     case cel::Kind::kDyn:
       type_info.name = "dyn";
       break;
+    case cel::Kind::kTypeParam:
+      type_info.name = type.name_;
+      type_info.is_type_param = true;
+      break;
     default:
-      type_info.name = type.GetName();
+      type_info.name = type.name_;
       for (const PyCelType& param : type.parameters_) {
         type_info.params.push_back(ToTypeInfo(param));
       }
