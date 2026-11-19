@@ -146,11 +146,13 @@ class PyCelMapItemAccessor : public PyCelValue {
   bool resolved_ ABSL_GUARDED_BY(mutex_) = false;
 };
 
+// This should be called with the GIL held.
 PyObject* CelValueToPyObject(const cel::Value& cel_value,
                              const std::shared_ptr<PyCelEnvInternal>& env,
                              const std::shared_ptr<PyCelArena>& arena,
                              bool plain_value);
 
+// This should be called with the GIL held.
 absl::StatusOr<cel::Value> PyObjectToCelValue(
     PyObject* py_object, const PyCelType& expected_type,
     absl::FunctionRef<std::string()> context,
