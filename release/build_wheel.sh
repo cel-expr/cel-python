@@ -69,7 +69,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 else
   cp -r "${SRC_DIR}/." .
 fi
-rm -rf cel_expr_python/*_test.py
+rm -rf cel_expr_python/*_test.py cel_expr_python/leak_check.py
 
 PYTHON_BIN="python"
 if command -v python3 &> /dev/null; then
