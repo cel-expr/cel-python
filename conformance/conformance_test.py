@@ -57,6 +57,20 @@ class ConformanceTestSuite(unittest.TestSuite):
       "type_deduction/type_parameters_in_type_type/type_param_in_type_type_string",
       "type_deduction/type_parameters_in_type_type/composite_type_param_in_type_type",
       "type_deduction/type_parameters_in_type_type/nested_type_param_in_type_type",
+      # TODO(b/519683720): Fix dyn type-parameter unification and asymmetric dyn joins in cel-cpp checker.
+      "optionals/optionals/dyn_optional_nested_or_value_index",
+      "optionals/optionals/dyn_optional_or_value_optindex",
+      "optionals/optionals/dyn_optional_or_value_size",
+      "type_deduction/any/any_list_mixed_dyn_reverse",
+      "type_deduction/any/any_list_mixed_int",
+      "type_deduction/any/any_list_mixed_int_reverse",
+      "type_deduction/any/any_optional_or_value",
+      "type_deduction/any/any_ternary_mixed_int",
+      "type_deduction/any/any_ternary_mixed_int_reverse",
+      "type_deduction/dyn_type_parameter_unification/.*",
+      # TODO(b/519683720): Python conformance harness does not map
+      # well_known: ANY in _convert_type.
+      "type_deduction/any/any_list_homogeneous",
       # TODO(b/178627883): Strong typing support for enums not implemented.
       "enums/strong_proto2/.*",
       "enums/strong_proto3/.*",
