@@ -40,6 +40,7 @@
 #include "cel_expr_python/free_threading_mutex.h"
 #include "cel_expr_python/py_cel_arena.h"
 #include "cel_expr_python/py_cel_env_internal.h"
+#include "cel_expr_python/py_cel_optional.h"
 #include "cel_expr_python/py_cel_type.h"
 #include "cel_expr_python/py_cel_value_provider.h"
 #include "cel_expr_python/py_error_status.h"
@@ -54,6 +55,24 @@
 namespace cel_python {
 
 namespace py = ::pybind11;
+
+namespace {
+
+std::string PyObjectRepr(PyObject* obj) {
+  if (obj == nullptr) {
+    return "<null>";
+  }
+  PyObject* repr = PyObject_Repr(obj);
+  const char* repr_cstr = repr != nullptr ? PyUnicode_AsUTF8(repr) : nullptr;
+  if (repr_cstr == nullptr) {
+    PyErr_Clear();
+  }
+  std::string repr_str = repr_cstr != nullptr ? repr_cstr : "<unknown>";
+  Py_XDECREF(repr);
+  return repr_str;
+}
+
+}  // namespace
 
 void PyCelValue::DefinePythonBindings(py::module& m) {
   py::class_<PyCelValue>(m, "Value")
@@ -461,8 +480,11 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
       cel::ListValue list = *cel_value.AsList();
       Py_ssize_t size = *list.Size();
       PyObject* py_list = PyList_New(size);
+      if (py_list == nullptr) {
+        return nullptr;
+      }
       absl::Status status = absl::OkStatus();
-      for (int i = 0; i < size; ++i) {
+      for (Py_ssize_t i = 0; i < size; ++i) {
         PyObject* py_item;
         if (plain_value) {
           absl::StatusOr<cel::Value> item =
@@ -478,6 +500,10 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
           py_item = py::cast(PyCelListItemAccessor(cel_value, i, arena, env))
                         .release()
                         .ptr();
+        }
+        if (py_item == nullptr) {
+          Py_DECREF(py_list);
+          return nullptr;
         }
         // PyList_SetItem is special in that it "steals" the reference to the
         // item being set, so we must not decref it.
@@ -505,12 +531,16 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
       }
 
       PyObject* py_map = PyDict_New();
+      if (py_map == nullptr) {
+        return nullptr;
+      }
       Py_ssize_t size = *key_list.Size();
-      for (int i = 0; i < size; ++i) {
+      for (Py_ssize_t i = 0; i < size; ++i) {
         absl::StatusOr<cel::Value> key =
             key_list.Get(i, env->GetDescriptorPool(), env->GetMessageFactory(),
                          arena->GetArena());
         if (!key.ok()) {
+          Py_DECREF(py_map);
           PyErr_Format(PyExc_RuntimeError, "Cannot get key: %s",
                        key.status().ToString().c_str());
           return nullptr;
@@ -518,6 +548,10 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
 
         PyObject* py_key = CelValueToPyObject(*key, env, arena,
                                               /*plain_value=*/true);
+        if (py_key == nullptr) {
+          Py_DECREF(py_map);
+          return nullptr;
+        }
         PyObject* py_value;
         if (plain_value) {
           cel::Value element_value;
@@ -525,9 +559,10 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
               map.Get(*key, env->GetDescriptorPool(), env->GetMessageFactory(),
                       arena->GetArena(), &element_value);
           if (!status.ok()) {
+            Py_DECREF(py_key);
+            Py_DECREF(py_map);
             PyErr_Format(PyExc_RuntimeError, "Cannot get value: %s",
                          status.ToString().c_str());
-            Py_DECREF(py_key);
             return nullptr;
           }
           py_value = CelValueToPyObject(element_value, env, arena,
@@ -537,12 +572,21 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
                          .release()
                          .ptr();
         }
+        if (py_value == nullptr) {
+          Py_DECREF(py_key);
+          Py_DECREF(py_map);
+          return nullptr;
+        }
         // In contrast to PyList_SetItem, PyDict_SetItem does not "steal" the
         // reference to the key and value being set, so we must decref them.
         // https://docs.python.org/3/c-api/dict.html#:~:text=int-,pydict_setitem
-        PyDict_SetItem(py_map, py_key, py_value);
+        int set_status = PyDict_SetItem(py_map, py_key, py_value);
         Py_DECREF(py_key);
         Py_DECREF(py_value);
+        if (set_status < 0) {
+          Py_DECREF(py_map);
+          return nullptr;
+        }
       }
       return py_map;
     }
@@ -569,6 +613,30 @@ PyObject* CelValueToPyObject(const cel::Value& cel_value,
     case cel::ValueKind::kType: {
       const cel::Type& type = cel_value.AsType()->type();
       return py::cast(PyCelType::FromCelType(type)).release().ptr();
+    }
+    case cel::ValueKind::kOpaque: {
+      if (auto optional_value = cel_value.AsOptional();
+          optional_value.has_value()) {
+        if (!optional_value->HasValue()) {
+          return py::cast(PyCelOptional::None()).release().ptr();
+        }
+        cel::Value inner_value = optional_value->Value();
+        if (plain_value) {
+          PyObject* py_inner = CelValueToPyObject(inner_value, env, arena,
+                                                  /*plain_value=*/true);
+          if (py_inner == nullptr) {
+            return nullptr;
+          }
+          py::object inner_obj = py::reinterpret_steal<py::object>(py_inner);
+          return py::cast(PyCelOptional::Of(inner_obj)).release().ptr();
+        }
+        py::object inner_val_obj =
+            py::cast(PyCelValue(inner_value, arena, env));
+        return py::cast(PyCelOptional::Of(inner_val_obj)).release().ptr();
+      }
+      PyErr_Format(PyExc_RuntimeError, "Unsupported opaque type: %s",
+                   std::string(cel_value.GetOpaque().GetTypeName()).c_str());
+      return nullptr;
     }
     default: {
       PyErr_Format(PyExc_RuntimeError, "Unimplemented type: %d",
@@ -674,11 +742,13 @@ static cel::Value ProtoMessageToCelValue(
   return *wrapped_message;
 }
 
+// This should be called with the GIL held.
 absl::StatusOr<cel::Value> PyObjectToCelValue(
     PyObject* py_object, const PyCelType& expected_type,
     absl::FunctionRef<std::string()> context,
     const std::shared_ptr<PyCelEnvInternal>& env, google::protobuf::Arena* arena,
     bool bypass_type_check) {
+  ABSL_CHECK(PyGILState_Check());
   if (!py_object) {
     return cel::ErrorValue::From(
         absl::InvalidArgumentError(
@@ -688,7 +758,8 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
   }
 
   switch (expected_type.GetKind()) {
-    case cel::Kind::kDyn: {
+    case cel::Kind::kDyn:
+    case cel::Kind::kTypeParam: {
       CEL_PYTHON_ASSIGN_OR_RETURN(const PyCelType& type,
                                   PyCelType::ForPyObject(py_object, context));
       return PyObjectToCelValue(py_object, type, context, env, arena,
@@ -767,9 +838,9 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           time = py::cast<absl::Time>(py_object);
         } catch (const py::cast_error& e) {
           PyErr_Clear();
-          return absl::UnknownError(absl::StrFormat(
-              "Cannot convert %s to absl::Time: %s",
-              PyUnicode_AsUTF8(PyObject_Repr(py_object)), e.what()));
+          return absl::UnknownError(
+              absl::StrFormat("Cannot convert %s to absl::Time: %s",
+                              PyObjectRepr(py_object), e.what()));
         }
         absl::StatusOr<cel::TimestampValue> timestamp_value =
             cel::SafeTimestampValue(time);
@@ -808,7 +879,7 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           PyErr_Clear();
           return absl::UnknownError(
               absl::StrFormat("Cannot convert %s to cel.Type.TIMESTAMP",
-                              PyUnicode_AsUTF8(PyObject_Repr(py_object))));
+                              PyObjectRepr(py_object)));
         }
         absl::Time time =
             absl::FromUnixSeconds(seconds) + absl::Nanoseconds(nanos);
@@ -830,9 +901,9 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
           duration = py::cast<absl::Duration>(py_object);
         } catch (const py::cast_error& e) {
           PyErr_Clear();
-          return absl::UnknownError(absl::StrFormat(
-              "Cannot convert %s to absl::Duration: %s",
-              PyUnicode_AsUTF8(PyObject_Repr(py_object)), e.what()));
+          return absl::UnknownError(
+              absl::StrFormat("Cannot convert %s to absl::Duration: %s",
+                              PyObjectRepr(py_object), e.what()));
         }
         absl::StatusOr<cel::DurationValue> duration_value =
             cel::SafeDurationValue(duration);
@@ -869,9 +940,8 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         Py_XDECREF(py_nanos);
         if (!ok) {
           PyErr_Clear();
-          return absl::UnknownError(
-              absl::StrFormat("Cannot convert %s to absl::Duration",
-                              PyUnicode_AsUTF8(PyObject_Repr(py_object))));
+          return absl::UnknownError(absl::StrFormat(
+              "Cannot convert %s to absl::Duration", PyObjectRepr(py_object)));
         }
         absl::Duration duration =
             absl::Seconds(seconds) + absl::Nanoseconds(nanos);
@@ -953,28 +1023,26 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         while (PyDict_Next(py_object, &pos, &key, &value)) {
           // Note: PyDict_Next returns borrowed references, so we shouldn't
           // DECREF them.
-          CEL_PYTHON_ASSIGN_OR_RETURN(
-              cel::Value converted_key,
-              PyObjectToCelValue(
-                  key, key_type,
-                  [context, key]() {
-                    return absl::StrFormat(
-                        "%s[%s]", context(),
-                        PyUnicode_AsUTF8(PyObject_Repr(key)));
-                  },
-                  env, arena));
+          CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_key,
+                                      PyObjectToCelValue(
+                                          key, key_type,
+                                          [context, key]() {
+                                            return absl::StrFormat(
+                                                "%s[%s]", context(),
+                                                PyObjectRepr(key));
+                                          },
+                                          env, arena));
 
-          CEL_PYTHON_ASSIGN_OR_RETURN(
-              cel::Value converted_value,
-              PyObjectToCelValue(
-                  value, value_type,
-                  [context, key, value]() {
-                    return absl::StrFormat(
-                        "%s[%s] -> %s", context(),
-                        PyUnicode_AsUTF8(PyObject_Repr(key)),
-                        PyUnicode_AsUTF8(PyObject_Repr(value)));
-                  },
-                  env, arena));
+          CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_value,
+                                      PyObjectToCelValue(
+                                          value, value_type,
+                                          [context, key, value]() {
+                                            return absl::StrFormat(
+                                                "%s[%s] -> %s", context(),
+                                                PyObjectRepr(key),
+                                                PyObjectRepr(value));
+                                          },
+                                          env, arena));
           CEL_PYTHON_RETURN_IF_ERROR(
               builder->Put(converted_key, converted_value));
         }
@@ -989,6 +1057,59 @@ absl::StatusOr<cel::Value> PyObjectToCelValue(
         }
       }
       return InvalidTypeError(py_object, context, expected_type, arena);
+    }
+    case cel::Kind::kType: {
+      if (py::isinstance<PyCelType>(py::handle(py_object))) {
+        // Copy PyCelType while holding the GIL so it remains self-contained
+        // across GIL release.
+        PyCelType py_type = py::cast<const PyCelType&>(py_object);
+        absl::StatusOr<cel::Type> cel_type;
+        {
+          // Release the GIL before calling into C++ DescriptorPool to maintain
+          // the lock hierarchy (DescriptorPool Mutex -> Python GIL).
+          // PyCelType::ToCelType may resolve message types via DescriptorPool,
+          // which on a cache miss calls back into Python via
+          // PyDescriptorDatabase (re-acquiring the GIL on demand).
+          py::gil_scoped_release gil_release;
+          cel_type =
+              PyCelType::ToCelType(py_type, arena, *env->GetDescriptorPool());
+        }
+        // The GIL is re-acquired here. Check if descriptor lookups raised a
+        // Python exception in PyDescriptorDatabase.
+        CEL_PYTHON_RETURN_IF_ERROR(PyErr_toStatus());
+        CEL_PYTHON_RETURN_IF_ERROR(cel_type.status());
+        return cel::TypeValue(*cel_type);
+      }
+      return InvalidTypeError(py_object, context, expected_type, arena);
+    }
+    case cel::Kind::kOpaque: {
+      if (expected_type.IsOptional()) {
+        if (!py::isinstance<PyCelOptional>(py::handle(py_object))) {
+          return InvalidTypeError(py_object, context, expected_type, arena);
+        }
+        const PyCelOptional& py_opt =
+            py::handle(py_object).cast<const PyCelOptional&>();
+        if (!py_opt.HasValue()) {
+          return cel::OptionalValue::None();
+        }
+        const PyCelType& element_type = expected_type.GetParamCount() > 0
+                                            ? expected_type.GetParam(0)
+                                            : PyCelType::Dyn();
+        CEL_PYTHON_ASSIGN_OR_RETURN(cel::Value converted_value,
+                                    PyObjectToCelValue(
+                                        py_opt.RawValue(), element_type,
+                                        [context]() {
+                                          return absl::StrFormat("%s.value()",
+                                                                 context());
+                                        },
+                                        env, arena));
+        if (converted_value.IsError()) {
+          return converted_value;
+        }
+        return cel::OptionalValue::Of(std::move(converted_value), arena);
+      }
+      return absl::UnimplementedError(absl::StrFormat(
+          "Unimplemented opaque type: %s", expected_type.GetName()));
     }
     default: {
       return absl::UnimplementedError(
