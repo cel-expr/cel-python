@@ -43,11 +43,11 @@ PyMessageFactory::PyMessageFactory(PyObject* descriptor_pool) {
     ABSL_LOG(FATAL) << "Cannot load module 'google.protobuf.message_factory'";
   }
   py_func_GetMessageClass_ = PyObject_GetAttrString(pModule, "GetMessageClass");
+  Py_DECREF(pModule);
   if (!py_func_GetMessageClass_) {
     ABSL_LOG(FATAL) << "Cannot find function "
                        "'google.protobuf.message_factory.GetMessageClass'";
   }
-  Py_INCREF(py_func_GetMessageClass_);
   py_func_MergeFromString_ = PyUnicode_FromString("MergeFromString");
 }
 
@@ -146,12 +146,12 @@ PyObject* PyMessageFactory::FromString(const std::string& message_type,
 
   PyObject* ret = PyObject_CallMethodObjArgs(message, py_func_MergeFromString_,
                                              serialized_proto_py, nullptr);
+  Py_DECREF(serialized_proto_py);
   if (!ret) {
     Py_DECREF(message);
-    Py_DECREF(serialized_proto_py);
     return nullptr;
   }
-  Py_DECREF(serialized_proto_py);
+  Py_DECREF(ret);
   return message;
 }
 
