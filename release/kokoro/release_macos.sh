@@ -58,7 +58,7 @@ pushd "${TMP_DIR}"
 
 cp -r "${SRC_DIR}"/{*,.*} . 2>/dev/null || true
 cp "${SRC_DIR}"/release/*.py "${SRC_DIR}"/release/*.toml . 2>/dev/null || true
-rm -rf cel_expr_python/*_test.py
+rm -rf cel_expr_python/*_test.py cel_expr_python/leak_check.py
 
 # Check if pyproject.toml exists before running sed
 if [ -f pyproject.toml ]; then
